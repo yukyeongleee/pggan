@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
 
-from lib.utils import set_norm_layer, set_activate_layer, AdaIN
+from lib.utils import set_norm_layer, set_activate_layer, AdaIN, upscale2d
+from lib.layers import PixelwiseVectorNorm, EqualizedConv2d, EqualizedLinear
 
 class Interpolate(nn.Module):
     def __init__(self, scale_factor, mode="bilinear"):
@@ -106,3 +107,62 @@ class AdaINResBlock(nn.Module):
         feat2 = self.resize(feat2) # size 
 
         return feat1 + feat2
+
+class ProgressiveGeneratorBlock(nn.Module):
+
+    def __init__(self, prev_depth, new_depth, equalizedlR=True, initBiasToZero=True, apply_norm=True, is_first=False):
+        super(ProgressiveGeneratorBlock, self).__init__()
+        
+        self.conv_list = []
+        if not is_first:
+            self.conv_list.append(EqualizedConv2d(prev_depth, 
+                                                  new_depth,
+                                                  3,
+                                                  padding=1,
+                                                  equalized=equalizedlR,
+                                                  initBiasToZero=initBiasToZero)))
+        self.conv_list.append(EqualizedConv2d(new_depth, 
+                                              new_depth,
+                                              3,
+                                              padding=1,
+                                              equalized=equalizedlR,
+                                              initBiasToZero=initBiasToZero)))
+
+        self.activ = set_activate_layer('lrelu')
+
+        self.apply_norm = apply_norm
+        if self.apply_norm:
+            self.norm = PixelwiseVectorNorm()
+        
+        self.is_first = is_first
+
+    def forward(self, x):
+        
+        if not is_first:
+            x = upscale2d(x)
+
+        for conv in self.conv_list:
+            x = self.activ(conv(x))
+            if self.apply_norm:
+                x = norm(x)
+
+        return x
+            
+class toRGBBlock(nn.Module):
+
+    def __init__(self, new_depth, output_dim=3, equalizedlR=True, initBiasToZero=True)
+        self.toRGB = EqualizedConv2d(new_depth,
+                                     output_dim,
+                                     1,
+                                     equalized=self.equalizedlR,
+                                     initBiasToZero=self.initBiasToZero))
+    
+    def forward(self, x, is_last=False):
+
+        y = self.toRGB(x)
+        if not is_last:
+            y = upscale2d(y)
+
+        return y
+
+        

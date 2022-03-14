@@ -4,12 +4,13 @@ import torchvision
 import cv2
 import os
 
-
 def set_norm_layer(norm_type, norm_dim):
     if norm_type == 'bn':
         norm = nn.BatchNorm2d(norm_dim)
     elif norm_type == 'in':
         norm = nn.InstanceNorm2d(norm_dim)
+    # elif norm_type == 'pn'
+    #     norm = PixelwiseVectorNorm() # from PGGAN
     elif norm_type == 'none':
         norm = None
     else:
@@ -101,3 +102,18 @@ def make_grid_image(images_list):
 
     grid = torch.cat(grid_rows, dim=1).numpy()
     return grid
+
+
+def upscale2d(x, factor=2):
+    """
+    Repeat x of shape (N, C, H, W) by factor times
+    Return (N, C, factor * H, factor * W)
+    """
+    assert isinstance(factor, int) and factor >= 1
+    if factor == 1:
+        return x
+    s = x.size()
+    x = x.view(-1, s[1], s[2], 1, s[3], 1)
+    x = x.expand(-1, s[1], s[2], factor, s[3], factor)
+    x = x.contiguous().view(-1, s[1], s[2] * factor, s[3] * factor)
+    return x

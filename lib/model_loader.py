@@ -4,7 +4,12 @@ import torch
 def CreateModel(gpu, args):
 
     model = None
-    if args.model_id == 'simswap':
+    if args.model_id == 'pggan':
+        from pggan.model import ProgressiveGAN
+        from pggan.options import TrainOptions
+        args = TrainOptions().parse()
+        model = ProgressiveGAN(args, gpu)
+    elif args.model_id == 'simswap':
         from simswap.model import SimSwap
         from simswap.options import TrainOptions
         args = TrainOptions().parse()
