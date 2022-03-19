@@ -9,6 +9,7 @@ def CreateModel(gpu, args):
         from pggan.options import TrainOptions
         args = TrainOptions().parse()
         model = ProgressiveGAN(args, gpu)
+        
     elif args.model_id == 'simswap':
         from simswap.model import SimSwap
         from simswap.options import TrainOptions

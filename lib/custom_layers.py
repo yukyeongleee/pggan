@@ -5,18 +5,9 @@ import torch.nn as nn
 
 from numpy import prod
 
-class PixelwiseVectorNorm(nn.Module):
-
-    def __init__(self):
-        super(PixelwiseVectorNorm, self).__init__()
-
-    def forward(self, x, epsilon=1e-8):
-        return x * (((x**2).mean(dim=1, keepdim=True) + epsilon).rsqrt())
-        
-
 def getLayerNormalizationFactor(x):
-    r"""
-    Get He's constant for the given layer
+    """
+    Get per-layer normalization constant from He’s initializer
     https://www.cv-foundation.org/openaccess/content_iccv_2015/papers/He_Delving_Deep_into_ICCV_2015_paper.pdf
     """
     size = x.weight.size()
@@ -24,9 +15,8 @@ def getLayerNormalizationFactor(x):
 
     return math.sqrt(2.0 / fan_in)
 
-
 class ConstrainedLayer(nn.Module):
-    r"""
+    """
     A handy refactor that allows the user to:
     - initialize one layer's bias to zero
     - apply He's initialization at runtime
@@ -37,7 +27,7 @@ class ConstrainedLayer(nn.Module):
                  equalized=True,
                  lrMul=1.0,
                  initBiasToZero=True):
-        r"""
+        """
         equalized (bool): if true, the layer's weight should evolve within
                          the range (-1, 1)
         initBiasToZero (bool): if true, bias will be initialized to zero
@@ -66,25 +56,20 @@ class ConstrainedLayer(nn.Module):
 class EqualizedConv2d(ConstrainedLayer):
 
     def __init__(self,
-                 nChannelsPrevious,
-                 nChannels,
-                 kernelSize,
+                 in_channels,
+                 out_channels, 
+                 kernel_size,
                  padding=0,
                  bias=True,
                  **kwargs):
-        r"""
+        """
         A nn.Conv2d module with specific constraints
-        Args:
-            nChannelsPrevious (int): number of channels in the previous layer
-            nChannels (int): number of channels of the current layer
-            kernelSize (int): size of the convolutional kernel
-            padding (int): convolution's padding
-            bias (bool): with bias ?
+            - Shape of nn.Conv2d.weight: (out_channels, in_channels, kernel_size[0], kernel_size[1])
         """
 
         ConstrainedLayer.__init__(self,
-                                  nn.Conv2d(nChannelsPrevious, nChannels,
-                                            kernelSize, padding=padding,
+                                  nn.Conv2d(in_channels, out_channels,
+                                            kernel_size, padding=padding,
                                             bias=bias),
                                   **kwargs)
 
@@ -92,18 +77,15 @@ class EqualizedConv2d(ConstrainedLayer):
 class EqualizedLinear(ConstrainedLayer):
 
     def __init__(self,
-                 nChannelsPrevious,
-                 nChannels,
+                 in_features,
+                 out_features,
                  bias=True,
                  **kwargs):
-        r"""
+        """
         A nn.Linear module with specific constraints
-        Args:
-            nChannelsPrevious (int): number of channels in the previous layer
-            nChannels (int): number of channels of the current layer
-            bias (bool): with bias ?
+            - Shape of nn.Linear.weight: (out_features, in_features)
         """
 
         ConstrainedLayer.__init__(self,
-                                  nn.Linear(nChannelsPrevious, nChannels,
+                                  nn.Linear(in_features, out_features,
                                   bias=bias), **kwargs)

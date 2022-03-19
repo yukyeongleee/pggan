@@ -1,8 +1,10 @@
+from asyncio import FastChildWatcher
+from re import X
 import torch
 import torch.nn as nn
 
-from lib.utils import set_norm_layer, set_activate_layer, AdaIN, upscale2d
-from lib.layers import PixelwiseVectorNorm, EqualizedConv2d, EqualizedLinear
+from lib.utils import downscale2d, set_norm_layer, set_activate_layer, AdaIN, upscale2d, num_flat_features
+from lib.layers import EqualizedConv2d, EqualizedLinear
 
 class Interpolate(nn.Module):
     def __init__(self, scale_factor, mode="bilinear"):
@@ -110,7 +112,7 @@ class AdaINResBlock(nn.Module):
 
 class ProgressiveGeneratorBlock(nn.Module):
 
-    def __init__(self, prev_depth, new_depth, equalizedlR=True, initBiasToZero=True, apply_norm=True, is_first=False):
+    def __init__(self, prev_depth, new_depth, equalizedlR=True, initBiasToZero=True, norm=None, is_first=False):
         super(ProgressiveGeneratorBlock, self).__init__()
         
         self.conv_list = []
@@ -120,49 +122,196 @@ class ProgressiveGeneratorBlock(nn.Module):
                                                   3,
                                                   padding=1,
                                                   equalized=equalizedlR,
-                                                  initBiasToZero=initBiasToZero)))
+                                                  initBiasToZero=initBiasToZero))
         self.conv_list.append(EqualizedConv2d(new_depth, 
                                               new_depth,
                                               3,
                                               padding=1,
                                               equalized=equalizedlR,
-                                              initBiasToZero=initBiasToZero)))
+                                              initBiasToZero=initBiasToZero))
 
         self.activ = set_activate_layer('lrelu')
 
-        self.apply_norm = apply_norm
-        if self.apply_norm:
-            self.norm = PixelwiseVectorNorm()
-        
+        # self.apply_norm = apply_norm
+        # if self.apply_norm:
+        #     self.norm = PixelwiseVectorNorm()
+        self.norm = norm
+
         self.is_first = is_first
 
     def forward(self, x):
         
-        if not is_first:
+        if not self.is_first:
             x = upscale2d(x)
 
         for conv in self.conv_list:
             x = self.activ(conv(x))
-            if self.apply_norm:
-                x = norm(x)
+            if self.norm != None:
+                x = self.norm(x)
 
         return x
             
 class toRGBBlock(nn.Module):
 
-    def __init__(self, new_depth, output_dim=3, equalizedlR=True, initBiasToZero=True)
+    def __init__(self, new_depth, output_dim=3, equalizedlR=True, initBiasToZero=True):
+        super(toRGBBlock, self).__init__()
+        
         self.toRGB = EqualizedConv2d(new_depth,
                                      output_dim,
                                      1,
-                                     equalized=self.equalizedlR,
-                                     initBiasToZero=self.initBiasToZero))
+                                     equalized=equalizedlR,
+                                     initBiasToZero=initBiasToZero)
     
-    def forward(self, x, is_last=False):
+    def forward(self, x, apply_upscale=False):
 
-        y = self.toRGB(x)
-        if not is_last:
-            y = upscale2d(y)
+        x = self.toRGB(x)
+        if apply_upscale:
+            x = upscale2d(x)
 
-        return y
+        return x
+
+
+class ProgressiveDiscriminatorBlock(nn.Module):
+
+    def __init__(self, prev_depth, new_depth, equalizedlR=True, initBiasToZero=True):
+        super(ProgressiveDiscriminatorBlock, self).__init__()
+        
+        # self.conv_list = []
+        # self.conv_list.append(EqualizedConv2d(new_depth, 
+        #                                       new_depth,
+        #                                       3,
+        #                                       padding=1,
+        #                                       equalized=equalizedlR,
+        #                                       initBiasToZero=initBiasToZero))
+        # self.conv_list.append(EqualizedConv2d(new_depth, 
+        #                                       prev_depth,
+        #                                       3,
+        #                                       padding=1,
+        #                                       equalized=equalizedlR,
+        #                                       initBiasToZero=initBiasToZero))
+
+        # self.activ = set_activate_layer('lrelu')
+
+        #@# nn.Sequential
+        self.activ = set_activate_layer('lrelu')
+        self.conv_list = []
+        self.conv_list.append(EqualizedConv2d(prev_depth, # new -> prev
+                                              prev_depth, # new -> prev
+                                              3,
+                                              padding=1,
+                                              equalized=equalizedlR,
+                                              initBiasToZero=initBiasToZero))
+        self.conv_list.append(self.activ)
+        self.conv_list.append(EqualizedConv2d(prev_depth,  # new -> prev
+                                              new_depth, # prev -> new
+                                              3,
+                                              padding=1,
+                                              equalized=equalizedlR,
+                                              initBiasToZero=initBiasToZero))
+        self.conv_list.append(self.activ)
+
+        self.conv_list = nn.Sequential(*self.conv_list)
+
+
+
+    def forward(self, x):
+        
+        #@#
+        # for conv in self.conv_list:
+        #     x = self.activ(conv(x))
+        x = self.conv_list(x)
+
+        x = downscale2d(x)
+        
+        return x
+
+
+def concatenate_stddev_channel(x, subgroup_size=4):
+    r"""
+    Add a minibatch standard deviation channel to the current layer.
+    In other words:
+        1) Compute the standard deviation of the feature map over the minibatch
+        2) Get the mean, over all pixels and all channels of thsi ValueError
+        3) expand the layer and cocatenate it with the input
+    Args:
+        - x (tensor): previous layer
+        - subGroupSize (int): size of the mini-batches on which the standard deviation
+        should be computed
+    """
+    size = x.size() # (N, Ch, W, H)
+    subgroup_size = min(size[0], subgroup_size)
+    if size[0] % subgroup_size != 0:
+        subgroup_size = size[0]
+    subgroup_num = int(size[0] / subgroup_size)
+    if subgroup_size > 1:
+        y = x.view(-1, subgroup_size, size[1], size[2], size[3]) 
+        y = torch.var(y, 1)
+        y = torch.sqrt(y + 1e-8)
+        y = y.view(subgroup_num, -1)
+        y = torch.mean(y, 1).view(subgroup_num, 1)
+        y = y.expand(subgroup_num, size[2]*size[3]).view((subgroup_num, 1, 1, size[2], size[3]))
+        y = y.expand(subgroup_num, subgroup_size, -1, -1, -1) 
+        y = y.contiguous().view((-1, 1, size[2], size[3]))
+    else:
+        y = torch.zeros(x.size(0), 1, x.size(2), x.size(3), device=x.device)
+
+    return torch.cat([x, y], dim=1) # (N, Ch+1, W, H)
 
         
+class LastProgressiveDiscriminatorBlock(nn.Module):
+
+    def __init__(self, depth, equalizedlR=True, initBiasToZero=True, apply_minibatch_norm=False):
+        super(LastProgressiveDiscriminatorBlock, self).__init__()
+        
+        self.conv_list = []
+        entry_dim = depth if apply_minibatch_norm else depth + 1
+        self.conv = EqualizedConv2d(entry_dim, 
+                                    depth,
+                                    3,
+                                    padding=1,
+                                    equalized=equalizedlR,
+                                    initBiasToZero=initBiasToZero)
+        self.linear = EqualizedLinear(depth * 16, 
+                                        depth,
+                                        equalized=equalizedlR,
+                                        initBiasToZero=initBiasToZero)
+
+        self.activ = set_activate_layer('lrelu')
+
+        self.apply_minibatch_norm = apply_minibatch_norm
+
+    def forward(self, x, subgroup_size=4):
+        
+        if self.apply_minibatch_norm:
+            x = concatenate_stddev_channel(x, subgroup_size=subgroup_size)
+
+        x = self.activ(self.conv(x))
+        
+        x = x.view(-1, num_flat_features(x))
+        x = self.activ(self.linear(x))
+
+        return x
+
+
+class fromRGBBlock(nn.Module):
+
+    #@# new_depth, input_dim=3 --> input_dim=3, new_depth=None
+    def __init__(self, input_dim=3, new_depth=None, equalizedlR=True, initBiasToZero=True):
+        super(fromRGBBlock, self).__init__()
+        
+        self.fromRGB = EqualizedConv2d(input_dim,
+                                     new_depth,
+                                     1,
+                                     equalized=equalizedlR,
+                                     initBiasToZero=initBiasToZero)
+       
+        self.activ = set_activate_layer('lrelu')
+    
+    def forward(self, x, apply_downscale=False):
+
+        if apply_downscale:
+            x = downscale2d(x)
+
+        x = self.activ(self.fromRGB(x))
+
+        return x

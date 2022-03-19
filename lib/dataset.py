@@ -81,3 +81,30 @@ class FaceDatasetValid(Dataset):
 
     def __len__(self):
         return self.N
+
+
+class UnsupervisedDataset(Dataset):
+    def __init__(self, dataset_root, isMaster):
+        self.imgpaths = [os.path.join(dataset_root, f) for f in os.listdir(dataset_root) if f.endswith('jpg')]
+    
+        self.transforms = transforms.Compose([
+            transforms.Resize((512,512)),
+            # data augmentation
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.ColorJitter(0.2, 0.2, 0.2, 0.01),
+            # [0, 1]
+            transforms.ToTensor(),
+            # [-1, 1]
+            # generator 마지막에 tanh인 경우에만 포함, sigmoid인 경우에는 생략
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        ])
+        if isMaster:
+            print(f"Dataset of {self.__len__()} images constructed for the training.")
+
+    def __len__(self):
+        return len(self.imgpaths)
+
+    def __getitem__(self, idx):
+        imgpath = self.imgpaths[idx]
+        X = Image.open(imgpath).convert("RGB")
+        return self.transforms(X)
