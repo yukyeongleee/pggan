@@ -115,27 +115,30 @@ class ProgressiveGeneratorBlock(nn.Module):
     def __init__(self, prev_depth, new_depth, equalizedlR=True, initBiasToZero=True, norm=None, is_first=False):
         super(ProgressiveGeneratorBlock, self).__init__()
         
-        self.conv_list = []
+        
+        self.block = []
         if not is_first:
-            self.conv_list.append(EqualizedConv2d(prev_depth, 
+            self.block.append(EqualizedConv2d(prev_depth, 
                                                   new_depth,
                                                   3,
                                                   padding=1,
                                                   equalized=equalizedlR,
                                                   initBiasToZero=initBiasToZero))
-        self.conv_list.append(EqualizedConv2d(new_depth, 
+            self.block.append(nn.LeakyReLU(0.2))
+            if norm: 
+                self.block.append(norm)
+
+        self.block.append(EqualizedConv2d(new_depth, 
                                               new_depth,
                                               3,
                                               padding=1,
                                               equalized=equalizedlR,
                                               initBiasToZero=initBiasToZero))
+        self.block.append(nn.LeakyReLU(0.2))
+        if norm: 
+            self.block.append(norm)
 
-        self.activ = set_activate_layer('lrelu')
-
-        # self.apply_norm = apply_norm
-        # if self.apply_norm:
-        #     self.norm = PixelwiseVectorNorm()
-        self.norm = norm
+        self.block = nn.Sequential(*self.block)
 
         self.is_first = is_first
 
@@ -143,11 +146,7 @@ class ProgressiveGeneratorBlock(nn.Module):
         
         if not self.is_first:
             x = upscale2d(x)
-
-        for conv in self.conv_list:
-            x = self.activ(conv(x))
-            if self.norm != None:
-                x = self.norm(x)
+        x = self.block(x)
 
         return x
             
@@ -173,55 +172,36 @@ class toRGBBlock(nn.Module):
 
 class ProgressiveDiscriminatorBlock(nn.Module):
 
-    def __init__(self, prev_depth, new_depth, equalizedlR=True, initBiasToZero=True):
+    def __init__(self, new_depth, prev_depth, equalizedlR=True, initBiasToZero=True):
         super(ProgressiveDiscriminatorBlock, self).__init__()
-        
-        # self.conv_list = []
-        # self.conv_list.append(EqualizedConv2d(new_depth, 
-        #                                       new_depth,
-        #                                       3,
-        #                                       padding=1,
-        #                                       equalized=equalizedlR,
-        #                                       initBiasToZero=initBiasToZero))
-        # self.conv_list.append(EqualizedConv2d(new_depth, 
-        #                                       prev_depth,
-        #                                       3,
-        #                                       padding=1,
-        #                                       equalized=equalizedlR,
-        #                                       initBiasToZero=initBiasToZero))
 
-        # self.activ = set_activate_layer('lrelu')
+        """
+        comment #4
+            list 안에 nn 모듈들을 추가하고, 마지막에 nn.Sequential 을 적용합니다.
+        """
 
-        #@# nn.Sequential
-        self.activ = set_activate_layer('lrelu')
-        self.conv_list = []
-        self.conv_list.append(EqualizedConv2d(prev_depth, # new -> prev
-                                              prev_depth, # new -> prev
+        self.block = []
+        self.block.append(EqualizedConv2d(new_depth,
+                                              new_depth,
                                               3,
                                               padding=1,
                                               equalized=equalizedlR,
                                               initBiasToZero=initBiasToZero))
-        self.conv_list.append(self.activ)
-        self.conv_list.append(EqualizedConv2d(prev_depth,  # new -> prev
-                                              new_depth, # prev -> new
+        self.block.append(nn.LeakyReLU(0.2))
+        self.block.append(EqualizedConv2d(new_depth,
+                                              prev_depth,
                                               3,
                                               padding=1,
                                               equalized=equalizedlR,
                                               initBiasToZero=initBiasToZero))
-        self.conv_list.append(self.activ)
+        self.block.append(nn.LeakyReLU(0.2))
+        self.block.append(nn.AvgPool2d((2, 2)))
 
-        self.conv_list = nn.Sequential(*self.conv_list)
-
-
+        self.block = nn.Sequential(*self.block)
 
     def forward(self, x):
         
-        #@#
-        # for conv in self.conv_list:
-        #     x = self.activ(conv(x))
-        x = self.conv_list(x)
-
-        x = downscale2d(x)
+        x = self.block(x)
         
         return x
 
@@ -264,7 +244,7 @@ class LastProgressiveDiscriminatorBlock(nn.Module):
         super(LastProgressiveDiscriminatorBlock, self).__init__()
         
         self.conv_list = []
-        entry_dim = depth if apply_minibatch_norm else depth + 1
+        entry_dim = depth + 1 if apply_minibatch_norm else depth
         self.conv = EqualizedConv2d(entry_dim, 
                                     depth,
                                     3,
@@ -276,7 +256,7 @@ class LastProgressiveDiscriminatorBlock(nn.Module):
                                         equalized=equalizedlR,
                                         initBiasToZero=initBiasToZero)
 
-        self.activ = set_activate_layer('lrelu')
+        self.activ = nn.LeakyReLU(0.2)
 
         self.apply_minibatch_norm = apply_minibatch_norm
 
@@ -305,7 +285,7 @@ class fromRGBBlock(nn.Module):
                                      equalized=equalizedlR,
                                      initBiasToZero=initBiasToZero)
        
-        self.activ = set_activate_layer('lrelu')
+        self.activ = nn.LeakyReLU(0.2)
     
     def forward(self, x, apply_downscale=False):
 

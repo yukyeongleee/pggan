@@ -44,9 +44,10 @@ class Generator(nn.Module):
         self.leakyRelu = torch.nn.LeakyReLU(LReLU_slope)
 
         # normalization
-        self.norm_layer = None
+        self.apply_pixel_norm = apply_pixel_norm
+        self.pixel_norm = None
         if apply_pixel_norm:
-            self.norm_layer = PixelwiseVectorNorm()
+            self.pixel_norm = PixelwiseVectorNorm()
 
         # Initalize the blocks
         self.block_depths = [first_depth]
@@ -60,7 +61,7 @@ class Generator(nn.Module):
         self.first_block = ProgressiveGeneratorBlock(first_depth, first_depth, 
                                                  equalizedlR=self.equalizedlR,
                                                  initBiasToZero=self.initBiasToZero, 
-                                                 norm=self.norm_layer, 
+                                                 norm=self.pixel_norm, 
                                                  is_first=True)
 
         self.toRGB_blocks.append(toRGBBlock(first_depth, 
@@ -111,7 +112,7 @@ class Generator(nn.Module):
         self.blocks.append(ProgressiveGeneratorBlock(prev_depth, new_depth, 
                                                      equalizedlR=self.equalizedlR,
                                                      initBiasToZero=self.initBiasToZero, 
-                                                     norm=self.norm_layer))
+                                                     norm=self.pixel_norm))
         self.toRGB_blocks.append(toRGBBlock(new_depth, 
                                             output_dim=self.output_dim, 
                                             equalizedlR=self.equalizedlR, 
@@ -134,17 +135,18 @@ class Generator(nn.Module):
         self.alpha = alpha
 
     def forward(self, x):
-        print(">> G input", x.shape)
+        # print(">> G input", x.shape)
 
-        ## Normalize the input ?
-        if self.norm_layer is not None:
-            x = self.norm_layer(x)
+        ## Normalize the input ? ### ????
+        if self.apply_pixel_norm:
+            x = self.pixel_norm(x)
         x = x.view(-1, num_flat_features(x)) # 1 x N
         # format layer
         x = self.leakyRelu(self.latent_format_layer(x))
         x = x.view(x.size()[0], -1, 4, 4)
 
-        x = self.norm_layer(x)
+        if self.apply_pixel_norm:
+            x = self.pixel_norm(x)
 
         # First block (no upsampling)
         x = self.first_block(x)
@@ -157,7 +159,7 @@ class Generator(nn.Module):
         # Upper scales
         for i, block in enumerate(self.blocks, 0):
             x = block(x)
-            print(">> intermediates", i, x.shape)
+            # print(">> intermediates", i, x.shape)
             # To RGB
             # If there are more than 2 blocks blending is required (alpha > 0)
             if self.alpha > 0 and i == (len(self.blocks) - 2):
@@ -165,7 +167,7 @@ class Generator(nn.Module):
 
         # To RGB (no alpha parameter for now)
         x = self.toRGB_blocks[-1](x)
-        print(">> G output", x.shape)
+        # print(">> G output", x.shape)
 
         # Blending with the lower resolution output when alpha > 0
         if self.alpha > 0:
@@ -226,12 +228,11 @@ class Discriminator(nn.Module):
         # Minibatch standard deviation
         self.apply_minibatch_norm = apply_minibatch_norm
 
-        # Last Block 
         # Perform Minibatch normalization
-        self.last_block = LastProgressiveDiscriminatorBlock(self.depths[-1], #@# last_depth --> self.depths[-1]
+        self.minibatch_normalization_block = LastProgressiveDiscriminatorBlock(last_depth,
                                                             equalizedlR=equalizedlR, initBiasToZero=initBiasToZero,
                                                             apply_minibatch_norm=apply_minibatch_norm)
-        self.fromRGB_blocks.append(fromRGBBlock(input_dim, self.depths[-1], #@# last_depth --> self.depths[-1]
+        self.fromRGB_blocks.append(fromRGBBlock(input_dim, last_depth,
                                                 equalizedlR=equalizedlR,
                                                 initBiasToZero=initBiasToZero))
 
@@ -246,11 +247,11 @@ class Discriminator(nn.Module):
         prev_depth = self.depths[-1]
         self.depths.append(new_depth)
 
-        self.blocks.append(ProgressiveDiscriminatorBlock(prev_depth, new_depth, 
+        self.blocks.append(ProgressiveDiscriminatorBlock(new_depth, prev_depth,
                                                          equalizedlR=self.equalizedlR, 
                                                          initBiasToZero=self.initBiasToZero))
 
-        self.fromRGB_blocks.append(fromRGBBlock(prev_depth, #@# self.input_dim --> prev_depth
+        self.fromRGB_blocks.append(fromRGBBlock(self.input_dim,
                                                   new_depth,
                                                   equalizedlR=self.equalizedlR,
                                                   initBiasToZero=self.initBiasToZero))
@@ -279,42 +280,30 @@ class Discriminator(nn.Module):
                                              initBiasToZero=self.initBiasToZero)
 
     def forward(self, x, get_feature = False):
-        print(">> D input", x.shape) # (8, 3, 256, 256)
+        # print(">> D input", x.shape) # (8, 3, 256, 256)
+        # print(self) # show the structure of Discriminator
+
         # Alpha blending
         if self.alpha > 0 and len(self.fromRGB_blocks) > 1:
-            y = self.fromRGB_blocks[1](x, apply_downscale=True)
-            # y = F.avg_pool2d(x, (2, 2))
-            # y = self.leakyRelu(self.fromRGBLayers[- 2](y))
+            y = self.fromRGB_blocks[-2](x, apply_downscale=True)
 
         # From RGB layer
-        x = self.fromRGB_blocks[0](x)
-        # x = self.leakyRelu(self.fromRGBLayers[-1](x))
+        x = self.fromRGB_blocks[-1](x)
 
         # Caution: we must explore the layers group in reverse order !
         # Explore all scales before 0
         apply_merge = self.alpha > 0 and len(self.blocks) > 1
-        # shift = len(self.fromRGB_blocks) - 2
-        for block in self.blocks: #@# reversed 삭제
+        for block in reversed(self.blocks):
             x = block(x)
 
             if apply_merge:
                 apply_merge = False
                 x = self.alpha * y + (1 - self.alpha) * x
 
-            # shift -= 1
-
-        # Now the last block
-    
         # Minibatch standard deviation
-        x = self.last_block(x)
-        # if self.miniBatchNormalization:
-        #     x = miniBatchStdDev(x)
+        x = self.minibatch_normalization_block(x)
 
-        # x = self.leakyRelu(self.groupScaleZero[0](x))
-
-        # x = x.view(-1, num_flat_features(x))
-        # x = self.leakyRelu(self.groupScaleZero[1](x))
-
+        # last layer
         out = self.decision_layer(x)
 
         if not get_feature:

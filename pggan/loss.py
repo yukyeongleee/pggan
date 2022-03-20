@@ -17,21 +17,28 @@ class WGANGPLoss(LossInterface):
 
 
     def get_loss_D(self, D_dict, discriminator):
+        
+        """
+        comment #7
+            WGANGP 는 Discriminator 를 두 번 update 합니다. 
+            (get_gradient_penalty 에서 한 번, L_D 를 이용해 model.D 를 업데이트 할 때 한 번)
+        """
+
         # Real 
         L_D_real = Loss.get_BCE_loss(D_dict["pred_real"], True)
         L_D_fake = Loss.get_BCE_loss(D_dict["pred_fake"], False)
-        L_gp = self.get_gradient_penalty(D_dict, discriminator, self.args.W_gp)
-        # L_reg = Loss.get_r1_reg(L_D_real, D_dict["I_target"])
-        L_D = L_D_real + L_D_fake + L_gp
+        L_D_gp = self.get_gradient_penalty(D_dict, discriminator, self.args.W_gp)
+        L_D = L_D_real + L_D_fake
         
         self.loss_dict["L_D_real"] = round(L_D_real.mean().item(), 4)
         self.loss_dict["L_D_fake"] = round(L_D_fake.mean().item(), 4)
-        self.loss_dict["L_gp"] = round(L_D.item(), 4)
+        self.loss_dict["L_D_gp"] = round(L_D_gp, 4)
+        self.loss_dict["L_D"] = round(L_D.item() + L_D_gp, 4)
 
         return L_D
 
 
-    def get_gradient_penalty(D_dict, discriminator, weight, backward=True):
+    def get_gradient_penalty(self, D_dict, discriminator, weight, backward=True):
         r"""
         Gradient penalty as described in
         "Improved Training of Wasserstein GANs"
@@ -44,24 +51,31 @@ class WGANGPLoss(LossInterface):
             - weight (float): weight to apply to the penalty term
             - backward (bool): loss backpropagation
         """
-
-        n_samples = len(D_dict["img_real"].size)
         
-        eps = torch.rand(n_samples, 1)
-        eps = eps.expand_as(n_samples, D_dict["img_real"]).contiguous()
-        eps = eps.to(input.device)
+        """
+        comment #6
+            numpy array 에 사용하는 함수와 tensor 에 사용하는 함수가 혼용되어 있었습니다.
+            ex) eps.expand_as vs eps.expand
+            일단 아래 링크를 보고 그대로 옮겨 왔는데, 혹시 수정했던 이유가 있으면 알려주세요!
+            https://github.com/facebookresearch/pytorch_GAN_zoo/blob/b75dee40918caabb4fe7ec561522717bf096a8cb/models/loss_criterions/gradient_losses.py
+        """
+
+        batchSize = D_dict["img_real"].size(0)        
+        eps = torch.rand(batchSize, 1)
+        eps = eps.expand(batchSize, int(D_dict["img_real"].nelement()/batchSize)).contiguous().view(D_dict["img_real"].size())
+        eps = eps.to(D_dict["img_real"].get_device())
         
-        interpolates = eps * input + ((1 - eps) * D_dict["img_fake"])
-        interpolates.requires_grad = True
+        interpolates = eps * D_dict["img_real"] + ((1 - eps) * D_dict["img_fake"])
+        torch.autograd.Variable(interpolates, requires_grad=True)
 
-        pred_interpolates = discriminator(interpolates)
-        # decisionInterpolate = decisionInterpolate[:, 0].sum()
+        decisionInterpolate = discriminator(interpolates)
+        decisionInterpolate = decisionInterpolate[:, 0].sum()
 
-        gradients = torch.autograd.grad(outputs=pred_interpolates,
+        gradients = torch.autograd.grad(outputs=decisionInterpolate,
                                         inputs=interpolates,
                                         create_graph=True, retain_graph=True)
 
-        gradients = gradients[0].view(n_samples, -1)
+        gradients = gradients[0].view(batchSize, -1)
         gradients = (gradients * gradients).sum(dim=1).sqrt()
         gradient_penalty = (((gradients - 1.0)**2)).sum() * weight
 

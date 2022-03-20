@@ -33,19 +33,20 @@ class ProgressiveGAN(ModelInterface):
             찾아보니 pgan_config.py 에 있는 depthScales 와 아래 for loop 에 있는 depthOtherScales 는 다르더라구요
 
         - pytorch_GAN_zoo/models/trainer/standard_configurations/pgan_config.py
-        line 45: _C.depthScales = [512, 512, 512, 512, 256, 128, 64, 32, 16]
+            - line 45: 
+                _C.depthScales = [512, 512, 512, 512, 256, 128, 64, 32, 16]
 
         - pytorch_GAN_zoo/models/progressive_gan.py
-        line 46: 
-        self.config.depthOtherScales = []
+            - line 46: 
+                self.config.depthOtherScales = []
 
-        line 66-67: 
-        for depth in self.config.depthOtherScales:
-            gnet.addScale(depth)
+            - line 66-67: 
+                for depth in self.config.depthOtherScales:
+                    gnet.addScale(depth)
 
-        line 70-71: 
-        if self.config.depthOtherScales:
-            gnet.setNewAlpha(self.config.alpha)
+            - line 70-71: 
+                if self.config.depthOtherScales:
+                    gnet.setNewAlpha(self.config.alpha)
         
         따라서 아래 내용은 없어도 괜찮을거 같습니다.
         """
@@ -102,7 +103,7 @@ class ProgressiveGAN(ModelInterface):
         Initialize dataset using the dataset paths specified in the command line arguments.
         CelebA: 202,599 face images of the size 178×218 from 10,177 celebrities
         """
-        dataset = UnsupervisedDataset(self.args.dataset_root, self.args.isMaster)
+        dataset = UnsupervisedDataset(self.args.dataset_root, self.args.scale_index, self.args.isMaster)
         N = len(dataset)
         N_train = round(N * 0.7)
         self.train_dataset, self.valid_dataset = torch.utils.data.random_split(dataset, [N_train, N - N_train])
@@ -149,7 +150,7 @@ class ProgressiveGAN(ModelInterface):
             "pred_fake": pred_fake,
         }
 
-        loss_D = self.loss_collector.get_loss_D(D_dict)
+        loss_D = self.loss_collector.get_loss_D(D_dict, self.D)
         utils.update_net(self.opt_D, loss_D)
 
         ###########
@@ -161,13 +162,13 @@ class ProgressiveGAN(ModelInterface):
         pred_fake, _ = self.D(img_fake, True)
 
         G_dict = {
-            "pred_fake": pred_fake,
+            "pred_fake": img_fake,
         }
 
         loss_G = self.loss_collector.get_loss_G(G_dict)
         utils.update_net(self.opt_G, loss_G)
 
-        return pred_fake
+        return [pred_fake]
 
     def validation(self, step):
         with torch.no_grad():
