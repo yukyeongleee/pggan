@@ -39,8 +39,7 @@ class TrainOptions(BaseOptions):
 
         # Model
         self.parser.add_argument('--latent_dim', type=int, default=512)
-        # self.parser.add_argument('--depths', type=list, default=[512, 512, 512, 512, 256, 128, 64, 32, 16])
-        self.parser.add_argument('--depths', type=list, default=[512, 512, 512, 512, 256, 128, 64])
+        self.parser.add_argument('--depths', type=list, default=[512, 512, 512, 512, 256, 128, 64, 32, 16])
         self.parser.add_argument('--input_dim', type=int, default=3)
         self.parser.add_argument('--output_dim', type=int, default=3)
         self.parser.add_argument('--initBiasToZero', type=bool, default=True)
