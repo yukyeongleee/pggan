@@ -27,13 +27,28 @@ class ProgressiveGAN(ModelInterface):
                             self.args.output_dim,
                             self.args.equalizedlR)
 
-        # Add scales if necessary
-        for depth in self.args.depths[1:]:
-            self.G.add_block(depth)
+        """
+        comment #1
+            PGGAN 은 작은 스케일부터 조금씩 키워나가는데, 시작하자마자 add_block 을 반복하는게 이상했습니다. 
+            찾아보니 pgan_config.py 에 있는 depthScales 와 아래 for loop 에 있는 depthOtherScales 는 다르더라구요
 
-        # If new scales are added, give the generator a blending layer
-        if self.args.depths[1:]:
-            self.G.set_new_alpha(self.args.alpha)
+        pytorch_GAN_zoo/models/trainer/standard_configurations/pgan_config.py
+        line 45: _C.depthScales = [512, 512, 512, 512, 256, 128, 64, 32, 16]
+
+        pytorch_GAN_zoo/models/progressive_gan.py
+        line 46: self.config.depthOtherScales = []
+        line 66-67: for depth in self.config.depthOtherScales:
+                        gnet.addScale(depth)
+        
+        따라서 아래 내용은 없어도 괜찮을거 같습니다.
+        """
+        # # Add scales if necessary
+        # for depth in self.args.depths[1:]:
+        #     self.G.add_block(depth)
+
+        # # If new scales are added, give the generator a blending layer
+        # if self.args.depths[1:]:
+        #     self.G.set_new_alpha(self.args.alpha)
 
         self.G.cuda(self.gpu).train()
 
@@ -46,13 +61,18 @@ class ProgressiveGAN(ModelInterface):
                                 self.args.input_dim, # input_dim output_dim
                                 self.args.equalizedlR)
 
-        # Add scales if necessary
-        for depth in self.args.depths[1:]:
-            self.D.add_block(depth)
+        """
+        comment #2
+            comment #1 과 같은 이유로 아래 내용도 주석 처리 합니다. 
 
-        # If new scales are added, give the generator a blending layer
-        if self.args.depths[1:]:
-            self.D.set_new_alpha(self.args.alpha)
+        """
+        # # Add scales if necessary
+        # for depth in self.args.depths[1:]:
+        #     self.D.add_block(depth)
+
+        # # If new scales are added, give the generator a blending layer
+        # if self.args.depths[1:]:
+        #     self.D.set_new_alpha(self.args.alpha)
 
         self.D.cuda(self.gpu).train()
 
