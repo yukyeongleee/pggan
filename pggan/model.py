@@ -32,13 +32,20 @@ class ProgressiveGAN(ModelInterface):
             PGGAN 은 작은 스케일부터 조금씩 키워나가는데, 시작하자마자 add_block 을 반복하는게 이상했습니다. 
             찾아보니 pgan_config.py 에 있는 depthScales 와 아래 for loop 에 있는 depthOtherScales 는 다르더라구요
 
-        pytorch_GAN_zoo/models/trainer/standard_configurations/pgan_config.py
+        - pytorch_GAN_zoo/models/trainer/standard_configurations/pgan_config.py
         line 45: _C.depthScales = [512, 512, 512, 512, 256, 128, 64, 32, 16]
 
-        pytorch_GAN_zoo/models/progressive_gan.py
-        line 46: self.config.depthOtherScales = []
-        line 66-67: for depth in self.config.depthOtherScales:
-                        gnet.addScale(depth)
+        - pytorch_GAN_zoo/models/progressive_gan.py
+        line 46: 
+        self.config.depthOtherScales = []
+
+        line 66-67: 
+        for depth in self.config.depthOtherScales:
+            gnet.addScale(depth)
+
+        line 70-71: 
+        if self.config.depthOtherScales:
+            gnet.setNewAlpha(self.config.alpha)
         
         따라서 아래 내용은 없어도 괜찮을거 같습니다.
         """
@@ -64,7 +71,6 @@ class ProgressiveGAN(ModelInterface):
         """
         comment #2
             comment #1 과 같은 이유로 아래 내용도 주석 처리 합니다. 
-
         """
         # # Add scales if necessary
         # for depth in self.args.depths[1:]:
