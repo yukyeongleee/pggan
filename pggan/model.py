@@ -20,12 +20,12 @@ class ProgressiveGAN(ModelInterface):
     def initialize_generator(self):
         self.G = Generator(self.args.latent_dim,
                             self.args.depths[0],
-                            self.args.initBiasToZero,
+                            self.args.init_bias_to_zero,
                             self.args.LReLU_slope,
                             self.args.apply_pixel_norm,
-                            self.args.generationActivation,
+                            self.args.generator_last_activation,
                             self.args.output_dim,
-                            self.args.equalizedlR)
+                            self.args.equalized_lr)
 
         """
         comment #1
@@ -62,12 +62,12 @@ class ProgressiveGAN(ModelInterface):
 
     def initialize_discriminator(self):
         self.D = Discriminator(self.args.depths[0],
-                                self.args.initBiasToZero,
+                                self.args.init_bias_to_zero,
                                 self.args.LReLU_slope,
                                 self.args.decision_layer_size,
                                 self.args.apply_minibatch_norm,
                                 self.args.input_dim, # input_dim output_dim
-                                self.args.equalizedlR)
+                                self.args.equalized_lr)
 
         """
         comment #2
@@ -162,18 +162,20 @@ class ProgressiveGAN(ModelInterface):
         pred_fake, _ = self.D(img_fake, True)
 
         G_dict = {
-            "pred_fake": img_fake,
+            "pred_fake": pred_fake,
         }
 
         loss_G = self.loss_collector.get_loss_G(G_dict)
         utils.update_net(self.opt_G, loss_G)
 
-        return [pred_fake]
+        return [img_fake]
 
     def validation(self, step):
         with torch.no_grad():
-            Y = self.G(self.valid_source, self.valid_target)
-        utils.save_image(self.args, step, "valid_imgs", [self.valid_source, self.valid_target, Y])
+            n_valid_samples = 5
+            latent_input = torch.randn(n_valid_samples, self.args.latent_dim).to(self.gpu)
+            Y = self.G(latent_input)
+        utils.save_image(self.args, step, "valid_imgs", Y)
 
     def save_image(self, result, step):
         utils.save_image(self.args, step, "imgs", result)

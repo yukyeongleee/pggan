@@ -16,8 +16,9 @@ class BaseOptions:
         self.parser.add_argument('--ckpt_id', type=str, default=None)
         self.parser.add_argument('--model_id', type=str, required=True)
             
-        self.parser.add_argument('--valid_dataset_root', type=str, \
-            default=None, help="dir path or None")
+        # self.parser.add_argument('--valid_dataset_root', type=str, \
+        #     default=None, help="dir path or None")
+        self.parser.add_argument('--validation', action='store_true')
 
         # Log
         self.parser.add_argument('--loss_cycle', type=str, default=10)

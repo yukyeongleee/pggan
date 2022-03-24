@@ -47,6 +47,7 @@ def train(gpu, args):
 
                 # initialize parameters related to the alpha
                 model.G.alpha = 0
+                model.D.alpha = 0
                 args.alpha_index = 0
                 alpha_jump_step = global_step + args.alpha_jump_start[args.scale_index]
                 alpha_jump_value = 1/args.alpha_jump_Ntimes[args.scale_index]
@@ -65,10 +66,11 @@ def train(gpu, args):
                 model.set_dataset()
                 model.set_data_iterator()
 
-        # alpha 가 바뀔 때
+        # alpha 가 바뀔 때 (Linear mode)
         if global_step == alpha_jump_step:
             if args.scale_index > 0 and args.alpha_index < args.alpha_jump_Ntimes[args.scale_index]:
                 model.G.alpha += alpha_jump_value
+                model.D.alpha += alpha_jump_value
                 alpha_jump_step = global_step + args.alpha_jump_interval[args.scale_index]
                 args.alpha_index += 1
 
@@ -90,7 +92,7 @@ def train(gpu, args):
             if global_step % args.test_cycle == 0:
                 model.save_image(result, global_step)
 
-                if args.valid_dataset_root:
+                if args.validation:
                     model.validation(global_step) 
 
             # Save checkpoint parameters 

@@ -26,11 +26,11 @@ class ConstrainedLayer(nn.Module):
                  module,
                  equalized=True,
                  lrMul=1.0,
-                 initBiasToZero=True):
+                 init_bias_to_zero=True):
         """
         equalized (bool): if true, the layer's weight should evolve within
                          the range (-1, 1)
-        initBiasToZero (bool): if true, bias will be initialized to zero
+        init_bias_to_zero (bool): if true, bias will be initialized to zero
         """
 
         super(ConstrainedLayer, self).__init__()
@@ -38,7 +38,7 @@ class ConstrainedLayer(nn.Module):
         self.module = module
         self.equalized = equalized
 
-        if initBiasToZero:
+        if init_bias_to_zero:
             self.module.bias.data.fill_(0)
         if self.equalized:
             self.module.weight.data.normal_(0, 1)

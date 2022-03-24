@@ -9,9 +9,7 @@ class WGANGPLoss(LossInterface):
         if self.args.W_adv:
             L_adv = Loss.get_BCE_loss(G_dict["pred_fake"], True)
             L_G += self.args.W_adv * L_adv
-            self.loss_dict["L_adv"] = round(L_adv.item(), 4)
-        
-        self.loss_dict["L_G"] = round(L_G.item(), 4)
+            self.loss_dict["L_G"] = round(L_G.item(), 4)
 
         return L_G
 
@@ -34,7 +32,7 @@ class WGANGPLoss(LossInterface):
         self.loss_dict["L_D_fake"] = round(L_D_fake.mean().item(), 4)
         self.loss_dict["L_D_gp"] = round(L_D_gp, 4)
         self.loss_dict["L_D"] = round(L_D.item() + L_D_gp, 4)
-
+        # self.loss_dict["L_D"] = round(L_D.item(), 4)
         return L_D
 
 
@@ -83,9 +81,3 @@ class WGANGPLoss(LossInterface):
             gradient_penalty.backward(retain_graph=True)
 
         return gradient_penalty.item()
-
-    # def get_epsilon_loss(self, x):
-    #     return 0
-
-    # def get_logistic_gradient_penalty(self, x):
-    #     return 0

@@ -112,7 +112,7 @@ class AdaINResBlock(nn.Module):
 
 class ProgressiveGeneratorBlock(nn.Module):
 
-    def __init__(self, prev_depth, new_depth, equalizedlR=True, initBiasToZero=True, norm=None, is_first=False):
+    def __init__(self, prev_depth, new_depth, equalized_lr=True, init_bias_to_zero=True, norm=None, is_first=False):
         super(ProgressiveGeneratorBlock, self).__init__()
         
         
@@ -122,8 +122,8 @@ class ProgressiveGeneratorBlock(nn.Module):
                                                   new_depth,
                                                   3,
                                                   padding=1,
-                                                  equalized=equalizedlR,
-                                                  initBiasToZero=initBiasToZero))
+                                                  equalized=equalized_lr,
+                                                  init_bias_to_zero=init_bias_to_zero))
             self.block.append(nn.LeakyReLU(0.2))
             if norm: 
                 self.block.append(norm)
@@ -132,8 +132,8 @@ class ProgressiveGeneratorBlock(nn.Module):
                                               new_depth,
                                               3,
                                               padding=1,
-                                              equalized=equalizedlR,
-                                              initBiasToZero=initBiasToZero))
+                                              equalized=equalized_lr,
+                                              init_bias_to_zero=init_bias_to_zero))
         self.block.append(nn.LeakyReLU(0.2))
         if norm: 
             self.block.append(norm)
@@ -152,14 +152,14 @@ class ProgressiveGeneratorBlock(nn.Module):
             
 class toRGBBlock(nn.Module):
 
-    def __init__(self, new_depth, output_dim=3, equalizedlR=True, initBiasToZero=True):
+    def __init__(self, new_depth, output_dim=3, equalized_lr=True, init_bias_to_zero=True):
         super(toRGBBlock, self).__init__()
         
         self.toRGB = EqualizedConv2d(new_depth,
                                      output_dim,
                                      1,
-                                     equalized=equalizedlR,
-                                     initBiasToZero=initBiasToZero)
+                                     equalized=equalized_lr,
+                                     init_bias_to_zero=init_bias_to_zero)
     
     def forward(self, x, apply_upscale=False):
 
@@ -172,7 +172,7 @@ class toRGBBlock(nn.Module):
 
 class ProgressiveDiscriminatorBlock(nn.Module):
 
-    def __init__(self, new_depth, prev_depth, equalizedlR=True, initBiasToZero=True):
+    def __init__(self, new_depth, prev_depth, equalized_lr=True, init_bias_to_zero=True):
         super(ProgressiveDiscriminatorBlock, self).__init__()
 
         """
@@ -185,15 +185,15 @@ class ProgressiveDiscriminatorBlock(nn.Module):
                                               new_depth,
                                               3,
                                               padding=1,
-                                              equalized=equalizedlR,
-                                              initBiasToZero=initBiasToZero))
+                                              equalized=equalized_lr,
+                                              init_bias_to_zero=init_bias_to_zero))
         self.block.append(nn.LeakyReLU(0.2))
         self.block.append(EqualizedConv2d(new_depth,
                                               prev_depth,
                                               3,
                                               padding=1,
-                                              equalized=equalizedlR,
-                                              initBiasToZero=initBiasToZero))
+                                              equalized=equalized_lr,
+                                              init_bias_to_zero=init_bias_to_zero))
         self.block.append(nn.LeakyReLU(0.2))
         self.block.append(nn.AvgPool2d((2, 2)))
 
@@ -240,7 +240,7 @@ def concatenate_stddev_channel(x, subgroup_size=4):
         
 class LastProgressiveDiscriminatorBlock(nn.Module):
 
-    def __init__(self, depth, equalizedlR=True, initBiasToZero=True, apply_minibatch_norm=False):
+    def __init__(self, depth, equalized_lr=True, init_bias_to_zero=True, apply_minibatch_norm=False):
         super(LastProgressiveDiscriminatorBlock, self).__init__()
         
         self.conv_list = []
@@ -249,12 +249,12 @@ class LastProgressiveDiscriminatorBlock(nn.Module):
                                     depth,
                                     3,
                                     padding=1,
-                                    equalized=equalizedlR,
-                                    initBiasToZero=initBiasToZero)
+                                    equalized=equalized_lr,
+                                    init_bias_to_zero=init_bias_to_zero)
         self.linear = EqualizedLinear(depth * 16, 
                                         depth,
-                                        equalized=equalizedlR,
-                                        initBiasToZero=initBiasToZero)
+                                        equalized=equalized_lr,
+                                        init_bias_to_zero=init_bias_to_zero)
 
         self.activ = nn.LeakyReLU(0.2)
 
@@ -276,14 +276,14 @@ class LastProgressiveDiscriminatorBlock(nn.Module):
 class fromRGBBlock(nn.Module):
 
     #@# new_depth, input_dim=3 --> input_dim=3, new_depth=None
-    def __init__(self, input_dim=3, new_depth=None, equalizedlR=True, initBiasToZero=True):
+    def __init__(self, input_dim=3, new_depth=None, equalized_lr=True, init_bias_to_zero=True):
         super(fromRGBBlock, self).__init__()
         
         self.fromRGB = EqualizedConv2d(input_dim,
                                      new_depth,
                                      1,
-                                     equalized=equalizedlR,
-                                     initBiasToZero=initBiasToZero)
+                                     equalized=equalized_lr,
+                                     init_bias_to_zero=init_bias_to_zero)
        
         self.activ = nn.LeakyReLU(0.2)
     

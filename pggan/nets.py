@@ -11,34 +11,34 @@ class Generator(nn.Module):
     def __init__(self,
                  latent_dim,
                  first_depth,
-                 initBiasToZero=True,
+                 init_bias_to_zero=True,
                  LReLU_slope=0.2,
                  apply_pixel_norm=True,
-                 generationActivation=None,
+                 last_activation=None,
                  output_dim=3,
-                 equalizedlR=True):
+                 equalized_lr=True):
         r"""
         Build a generator for a progressive GAN model
         Args:
             - dimLatent (int): dimension of the latent vector
             - depthScale0 (int): depth of the lowest resolution scales
-            - initBiasToZero (bool): should we set the bias to zero when a
+            - init_bias_to_zero (bool): should we set the bias to zero when a
                                     new scale is added
             - leakyReluLeak (float): leakyness of the leaky relu activation
                                     function
             - normalization (bool): normalize the input latent vector
-            - generationActivation (function): activation function of the last
+            - last_activation (function): activation function of the last
                                                layer (RGB layer). If None, then
                                                the identity is used
             - dimOutput (int): dimension of the output image. 3 -> RGB, 1 ->
                                grey levels
-            - equalizedlR (bool): set to true to initiualize the layers with
+            - equalized_lr (bool): set to true to initiualize the layers with
                                   N(0,1) and apply He's constant at runtime
         """
         super(Generator, self).__init__()
 
-        self.equalizedlR = equalizedlR
-        self.initBiasToZero = initBiasToZero
+        self.equalized_lr = equalized_lr
+        self.init_bias_to_zero = init_bias_to_zero
 
         # Leaky relu activation
         self.leakyRelu = torch.nn.LeakyReLU(LReLU_slope)
@@ -59,15 +59,15 @@ class Generator(nn.Module):
         self.init_format_layer(latent_dim)
         self.output_dim = output_dim
         self.first_block = ProgressiveGeneratorBlock(first_depth, first_depth, 
-                                                 equalizedlR=self.equalizedlR,
-                                                 initBiasToZero=self.initBiasToZero, 
+                                                 equalized_lr=self.equalized_lr,
+                                                 init_bias_to_zero=self.init_bias_to_zero, 
                                                  norm=self.pixel_norm, 
                                                  is_first=True)
 
         self.toRGB_blocks.append(toRGBBlock(first_depth, 
                                             output_dim=self.output_dim, 
-                                            equalizedlR=self.equalizedlR, 
-                                            initBiasToZero=self.initBiasToZero))
+                                            equalized_lr=self.equalized_lr, 
+                                            init_bias_to_zero=self.init_bias_to_zero))
 
         # Initalize the upscaling parameters
         # alpha : when a new scale is added to the network, the previous
@@ -76,7 +76,7 @@ class Generator(nn.Module):
         self.alpha = 0
 
         # Last layer activation function
-        self.generationActivation = generationActivation
+        self.last_activation = last_activation
         
 
 
@@ -90,7 +90,7 @@ class Generator(nn.Module):
         self.latent_dim = latent_dim
         self.latent_format_layer = EqualizedLinear(self.latent_dim,
                                                     16 * self.first_depth,
-                                                    initBiasToZero=self.initBiasToZero)
+                                                    init_bias_to_zero=self.init_bias_to_zero)
 
     def get_output_size(self):
         r"""
@@ -110,32 +110,31 @@ class Generator(nn.Module):
 
         self.block_depths.append(new_depth)
         self.blocks.append(ProgressiveGeneratorBlock(prev_depth, new_depth, 
-                                                     equalizedlR=self.equalizedlR,
-                                                     initBiasToZero=self.initBiasToZero, 
+                                                     equalized_lr=self.equalized_lr,
+                                                     init_bias_to_zero=self.init_bias_to_zero, 
                                                      norm=self.pixel_norm))
         self.toRGB_blocks.append(toRGBBlock(new_depth, 
                                             output_dim=self.output_dim, 
-                                            equalizedlR=self.equalizedlR, 
-                                            initBiasToZero=self.initBiasToZero))
+                                            equalized_lr=self.equalized_lr, 
+                                            init_bias_to_zero=self.init_bias_to_zero))
 
-    def set_new_alpha(self, alpha):
-        r"""
-        Update the value of the merging factor alpha
-        Args:
-            - alpha (float): merging factor, must be in [0, 1]
-        """
+    # def set_new_alpha(self, alpha):
+    #     r"""
+    #     Update the value of the merging factor alpha
+    #     Args:
+    #         - alpha (float): merging factor, must be in [0, 1]
+    #     """
         
-        if alpha < 0 or alpha > 1:
-            raise ValueError("alpha must be in [0,1]")
+    #     if alpha < 0 or alpha > 1:
+    #         raise ValueError("alpha must be in [0,1]")
 
-        if not self.toRGB_blocks:
-            raise AttributeError("Can't set an alpha layer if only the scale 0"
-                                 "is defined")
+    #     if not self.toRGB_blocks:
+    #         raise AttributeError("Can't set an alpha layer if only the scale 0"
+    #                              "is defined")
 
-        self.alpha = alpha
+    #     self.alpha = alpha
 
     def forward(self, x):
-        # print(">> G input", x.shape)
 
         ## Normalize the input ? ### ????
         if self.apply_pixel_norm:
@@ -161,20 +160,19 @@ class Generator(nn.Module):
             x = block(x)
             # print(">> intermediates", i, x.shape)
             # To RGB
-            # If there are more than 2 blocks blending is required (alpha > 0)
+            # If there are more than 2 blocks and blending is required (alpha > 0)
             if self.alpha > 0 and i == (len(self.blocks) - 2):
                 x_prev = self.toRGB_blocks[-2](x, apply_upscale=True)
 
-        # To RGB (no alpha parameter for now)
+        # To RGB (No need to upscale for)
         x = self.toRGB_blocks[-1](x)
-        # print(">> G output", x.shape)
 
         # Blending with the lower resolution output when alpha > 0
         if self.alpha > 0:
             x = self.alpha * x_prev + (1.0 - self.alpha) * x
 
-        if self.generationActivation is not None:
-            x = self.generationActivation(x)
+        if self.last_activation is not None:
+            x = self.last_activation(x)
 
         return x
 
@@ -183,17 +181,17 @@ class Discriminator(nn.Module):
 
     def __init__(self,
                  last_depth,
-                 initBiasToZero=True,
+                 init_bias_to_zero=True,
                  LReLU_slope=0.2,
                  decision_layer_size=1,
                  apply_minibatch_norm=False,
                  input_dim=3,
-                 equalizedlR=True):
+                 equalized_lr=True):
         r"""
         Build a discriminator for a progressive GAN model
         Args:
             - depthScale0 (int): depth of the lowest resolution scales
-            - initBiasToZero (bool): should we set the bias to zero when a
+            - init_bias_to_zero (bool): should we set the bias to zero when a
                                     new scale is added
             - leakyReluLeak (float): leakyness of the leaky relu activation
                                     function
@@ -211,8 +209,8 @@ class Discriminator(nn.Module):
         super(Discriminator, self).__init__()
 
         # Initialization paramneters
-        self.initBiasToZero = initBiasToZero
-        self.equalizedlR = equalizedlR
+        self.init_bias_to_zero = init_bias_to_zero
+        self.equalized_lr = equalized_lr
         self.input_dim = input_dim
 
         # Initalize the scales
@@ -230,11 +228,11 @@ class Discriminator(nn.Module):
 
         # Perform Minibatch normalization
         self.minibatch_normalization_block = LastProgressiveDiscriminatorBlock(last_depth,
-                                                            equalizedlR=equalizedlR, initBiasToZero=initBiasToZero,
+                                                            equalized_lr=equalized_lr, init_bias_to_zero=init_bias_to_zero,
                                                             apply_minibatch_norm=apply_minibatch_norm)
         self.fromRGB_blocks.append(fromRGBBlock(input_dim, last_depth,
-                                                equalizedlR=equalizedlR,
-                                                initBiasToZero=initBiasToZero))
+                                                equalized_lr=equalized_lr,
+                                                init_bias_to_zero=init_bias_to_zero))
 
         # Initalize the upscaling parameters
         self.alpha = 0
@@ -248,36 +246,36 @@ class Discriminator(nn.Module):
         self.depths.append(new_depth)
 
         self.blocks.append(ProgressiveDiscriminatorBlock(new_depth, prev_depth,
-                                                         equalizedlR=self.equalizedlR, 
-                                                         initBiasToZero=self.initBiasToZero))
+                                                         equalized_lr=self.equalized_lr, 
+                                                         init_bias_to_zero=self.init_bias_to_zero))
 
         self.fromRGB_blocks.append(fromRGBBlock(self.input_dim,
                                                   new_depth,
-                                                  equalizedlR=self.equalizedlR,
-                                                  initBiasToZero=self.initBiasToZero))
+                                                  equalized_lr=self.equalized_lr,
+                                                  init_bias_to_zero=self.init_bias_to_zero))
 
-    def set_new_alpha(self, alpha):
-        r"""
-        Update the value of the merging factor alpha
-        Args:
-            - alpha (float): merging factor, must be in [0, 1]
-        """
+    # def set_new_alpha(self, alpha):
+    #     r"""
+    #     Update the value of the merging factor alpha
+    #     Args:
+    #         - alpha (float): merging factor, must be in [0, 1]
+    #     """
 
-        if alpha < 0 or alpha > 1:
-            raise ValueError("alpha must be in [0,1]")
+    #     if alpha < 0 or alpha > 1:
+    #         raise ValueError("alpha must be in [0,1]")
 
-        if not self.fromRGB_blocks:
-            raise AttributeError("Can't set an alpha layer if only the scale 0"
-                                 "is defined")
+    #     if not self.fromRGB_blocks:
+    #         raise AttributeError("Can't set an alpha layer if only the scale 0"
+    #                              "is defined")
 
-        self.alpha = alpha
+    #     self.alpha = alpha
 
     def init_decision_layer(self, decision_layer_size):
 
         self.decision_layer = EqualizedLinear(self.depths[0],
                                              decision_layer_size,
-                                             equalized=self.equalizedlR,
-                                             initBiasToZero=self.initBiasToZero)
+                                             equalized=self.equalized_lr,
+                                             init_bias_to_zero=self.init_bias_to_zero)
 
     def forward(self, x, get_feature = False):
         # print(">> D input", x.shape) # (8, 3, 256, 256)
@@ -289,7 +287,7 @@ class Discriminator(nn.Module):
 
         # From RGB layer
         x = self.fromRGB_blocks[-1](x)
-
+ 
         # Caution: we must explore the layers group in reverse order !
         # Explore all scales before 0
         apply_merge = self.alpha > 0 and len(self.blocks) > 1
@@ -303,7 +301,7 @@ class Discriminator(nn.Module):
         # Minibatch standard deviation
         x = self.minibatch_normalization_block(x)
 
-        # last layer
+        # Last layer
         out = self.decision_layer(x)
 
         if not get_feature:
