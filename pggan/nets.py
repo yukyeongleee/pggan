@@ -118,25 +118,10 @@ class Generator(nn.Module):
                                             equalized_lr=self.equalized_lr, 
                                             init_bias_to_zero=self.init_bias_to_zero))
 
-    # def set_new_alpha(self, alpha):
-    #     r"""
-    #     Update the value of the merging factor alpha
-    #     Args:
-    #         - alpha (float): merging factor, must be in [0, 1]
-    #     """
-        
-    #     if alpha < 0 or alpha > 1:
-    #         raise ValueError("alpha must be in [0,1]")
-
-    #     if not self.toRGB_blocks:
-    #         raise AttributeError("Can't set an alpha layer if only the scale 0"
-    #                              "is defined")
-
-    #     self.alpha = alpha
 
     def forward(self, x):
 
-        ## Normalize the input ? ### ????
+        ## Normalize the input ?
         if self.apply_pixel_norm:
             x = self.pixel_norm(x)
         x = x.view(-1, num_flat_features(x)) # 1 x N
@@ -254,22 +239,6 @@ class Discriminator(nn.Module):
                                                   equalized_lr=self.equalized_lr,
                                                   init_bias_to_zero=self.init_bias_to_zero))
 
-    # def set_new_alpha(self, alpha):
-    #     r"""
-    #     Update the value of the merging factor alpha
-    #     Args:
-    #         - alpha (float): merging factor, must be in [0, 1]
-    #     """
-
-    #     if alpha < 0 or alpha > 1:
-    #         raise ValueError("alpha must be in [0,1]")
-
-    #     if not self.fromRGB_blocks:
-    #         raise AttributeError("Can't set an alpha layer if only the scale 0"
-    #                              "is defined")
-
-    #     self.alpha = alpha
-
     def init_decision_layer(self, decision_layer_size):
 
         self.decision_layer = EqualizedLinear(self.depths[0],
@@ -278,9 +247,6 @@ class Discriminator(nn.Module):
                                              init_bias_to_zero=self.init_bias_to_zero)
 
     def forward(self, x, get_feature = False):
-        # print(">> D input", x.shape) # (8, 3, 256, 256)
-        # print(self) # show the structure of Discriminator
-
         # Alpha blending
         if self.alpha > 0 and len(self.fromRGB_blocks) > 1:
             y = self.fromRGB_blocks[-2](x, apply_downscale=True)
