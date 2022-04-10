@@ -4,8 +4,13 @@ PyTorch Implementation of [Karras et al., "Progressive Growing of GANs for Impro
 -----
 # Getting Started
 ## Dataset
+**37345 Korean front face images** were used for train. Images were resized to `2**(scale_index+2)` x `2**(scale_index+2)` before passed to the model as input.
 
 ## Installation
+We support `python3`. To install the dependencies run:
+```bash
+pip install -r requirements.txt
+```
 
 -----
 # Usage
@@ -28,9 +33,9 @@ If you want to load a checkpoint and retrain it, use "--ckpt_id"
 ```bash
 python train.py --model pggan --run_id simple_test --ckpt_id={PATH/TO/CKPT} 
 ```
-## Generate (not implemented yet)
+## Generate
 ```bash
-python test.py --model_id pggan --run_id simple_test
+python test.py
 ```
 
 -----
@@ -78,13 +83,13 @@ for block in reversed(self.blocks):
 ```
 
 ## Objectives
-**WGAN-GP loss** is used. Both generator and discriminator are optimized per every minibatch. Indeed, the original paper introduces an additional term into the discriminator loss, but this is not implemented yet. 
+**WGAN-GP loss** is used. Both generator and discriminator are optimized per every minibatch. In addition, **drift loss**, which is used to keep the discriminator output from drifting too far away from 0, is added to the discriminator loss.
 
 -----
 ## TO DO
-- [ ] implement fourth term of discriminator loss 
-- [ ] implement test.py
-- [ ] upload requirements.txt
+- [x] implement fourth term of discriminator loss 
+- [x] implement test.py
+- [x] upload requirements.txt
 - [ ] upload checkpoint and sample output
 
 ## Authors
