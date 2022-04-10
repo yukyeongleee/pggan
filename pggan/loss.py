@@ -22,21 +22,25 @@ class WGANGPLoss(LossInterface):
             (get_gradient_penalty 에서 한 번, L_D 를 이용해 model.D 를 업데이트 할 때 한 번)
         """
 
-        # Real 
         L_D_real = Loss.get_BCE_loss(D_dict["pred_real"], True)
         L_D_fake = Loss.get_BCE_loss(D_dict["pred_fake"], False)
-        L_D_gp = self.get_gradient_penalty(D_dict, discriminator, self.args.W_gp)
         L_D = L_D_real + L_D_fake
         
+        # WGAN-GP gradient loss
+        L_D_gp = self.get_gradient_penalty(D_dict, discriminator)
+        
+        # Drift loss (the fourth term)
+        L_D_eps = self.get_drift_loss(D_dict)
+
         self.loss_dict["L_D_real"] = round(L_D_real.mean().item(), 4)
         self.loss_dict["L_D_fake"] = round(L_D_fake.mean().item(), 4)
         self.loss_dict["L_D_gp"] = round(L_D_gp, 4)
-        self.loss_dict["L_D"] = round(L_D.item() + L_D_gp, 4)
-        # self.loss_dict["L_D"] = round(L_D.item(), 4)
+        self.loss_dict["L_D_eps"] = round(L_D_eps, 4)
+        self.loss_dict["L_D"] = round(L_D.item() + L_D_gp + L_D_eps, 4)
         return L_D
 
 
-    def get_gradient_penalty(self, D_dict, discriminator, weight, backward=True):
+    def get_gradient_penalty(self, D_dict, discriminator, backward=True):
         r"""
         Gradient penalty as described in
         "Improved Training of Wasserstein GANs"
@@ -57,27 +61,36 @@ class WGANGPLoss(LossInterface):
             일단 아래 링크를 보고 그대로 옮겨 왔는데, 혹시 수정했던 이유가 있으면 알려주세요!
             https://github.com/facebookresearch/pytorch_GAN_zoo/blob/b75dee40918caabb4fe7ec561522717bf096a8cb/models/loss_criterions/gradient_losses.py
         """
+        if self.args.W_gp:
+                
+            batchSize = D_dict["img_real"].size(0)        
+            eps = torch.rand(batchSize, 1)
+            eps = eps.expand(batchSize, int(D_dict["img_real"].nelement()/batchSize)).contiguous().view(D_dict["img_real"].size())
+            eps = eps.to(D_dict["img_real"].get_device())
+            
+            interpolates = eps * D_dict["img_real"] + ((1 - eps) * D_dict["img_fake"])
+            torch.autograd.Variable(interpolates, requires_grad=True)
 
-        batchSize = D_dict["img_real"].size(0)        
-        eps = torch.rand(batchSize, 1)
-        eps = eps.expand(batchSize, int(D_dict["img_real"].nelement()/batchSize)).contiguous().view(D_dict["img_real"].size())
-        eps = eps.to(D_dict["img_real"].get_device())
-        
-        interpolates = eps * D_dict["img_real"] + ((1 - eps) * D_dict["img_fake"])
-        torch.autograd.Variable(interpolates, requires_grad=True)
+            decisionInterpolate = discriminator(interpolates)
+            decisionInterpolate = decisionInterpolate[:, 0].sum()
 
-        decisionInterpolate = discriminator(interpolates)
-        decisionInterpolate = decisionInterpolate[:, 0].sum()
+            gradients = torch.autograd.grad(outputs=decisionInterpolate,
+                                            inputs=interpolates,
+                                            create_graph=True, retain_graph=True)
 
-        gradients = torch.autograd.grad(outputs=decisionInterpolate,
-                                        inputs=interpolates,
-                                        create_graph=True, retain_graph=True)
+            gradients = gradients[0].view(batchSize, -1)
+            gradients = (gradients * gradients).sum(dim=1).sqrt()
+            gradient_penalty = (((gradients - 1.0)**2)).sum() * self.args.W_gp
 
-        gradients = gradients[0].view(batchSize, -1)
-        gradients = (gradients * gradients).sum(dim=1).sqrt()
-        gradient_penalty = (((gradients - 1.0)**2)).sum() * weight
-
-        if backward:
-            gradient_penalty.backward(retain_graph=True)
+            if backward:
+                gradient_penalty.backward(retain_graph=True)
 
         return gradient_penalty.item()
+
+    def get_drift_loss(self, D_dict):
+        """
+        Loss for keeping D output from drifting too far away from 0
+        """
+        if self.args.W_drift_D:
+            drift = (D_dict["pred_real"] ** 2).sum() * self.args.W_drift_D
+            return drift.item()

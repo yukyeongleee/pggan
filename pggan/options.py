@@ -34,6 +34,7 @@ class TrainOptions(BaseOptions):
         # Weight
         self.parser.add_argument('--W_adv', type=float, default=1)
         self.parser.add_argument('--W_gp', type=float, default=10)
+        self.parser.add_argument('--W_drift_D', type=float, default=0.001)
 
         # Model
         self.parser.add_argument('--latent_dim', type=int, default=512)
