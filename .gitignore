@@ -1,4 +1,5 @@
 train_result/
+test_result/
 wandb/
 *.pyc
 *__pycache__

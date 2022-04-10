@@ -69,3 +69,37 @@ class TrainOptions(BaseOptions):
         
         self.parser.add_argument('--decision_layer_size', type=int, default=1)
 
+
+class TestOptions(BaseOptions):
+    
+    def initialize(self):
+
+        # GPU
+        self.parser.add_argument('--gpu', type=int, default=0)
+        
+        # Sample Generation
+        self.parser.add_argument('--n_samples', type=int, default=10)
+        self.parser.add_argument('--save_path', type=str, default='./test_result')
+        
+        # Model
+        self.parser.add_argument('--ckpt_path', type=str, default='train_result/fb_w_gp/ckpt/G_latest.pt')
+
+        self.parser.add_argument('--latent_dim', type=int, default=512)
+        self.parser.add_argument('--input_dim', type=int, default=3)
+        self.parser.add_argument('--output_dim', type=int, default=3)
+        self.parser.add_argument('--init_bias_to_zero', type=bool, default=True)
+        
+        self.parser.add_argument('--depths', type=list, \
+            # default=[512, 512, 512, 512, 256, 128, 64, 32, 16]) # 1024 x 1024
+            # default=[512, 512, 512, 512, 256, 128, 64]) # 256 x 256
+            default=[512, 512, 512, 512, 256, 128]) # 128 x 128 current ckpt is not complete
+    
+        ## Activation
+        self.parser.add_argument('--LReLU_slope', type=float, default=0.2)
+        self.parser.add_argument('--generator_last_activation', default=None) # linear function as default
+
+        ## Normalization        
+        self.parser.add_argument('--apply_pixel_norm', type=bool, default=True)
+
+        self.parser.add_argument('--equalized_lr', type=bool, default=True)
+      

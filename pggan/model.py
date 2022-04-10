@@ -17,6 +17,9 @@ class ProgressiveGAN(ModelInterface):
         self.initialize_generator()
         self.initialize_discriminator()
 
+        self.G.train()
+        self.D.train()
+
     def initialize_generator(self):
         self.G = Generator(self.args.latent_dim,
                             self.args.depths[0],
@@ -58,7 +61,7 @@ class ProgressiveGAN(ModelInterface):
         # if self.args.depths[1:]:
         #     self.G.set_new_alpha(self.args.alpha)
 
-        self.G.cuda(self.gpu).train()
+        self.G.cuda(self.gpu)
 
     def initialize_discriminator(self):
         self.D = Discriminator(self.args.depths[0],
@@ -81,7 +84,7 @@ class ProgressiveGAN(ModelInterface):
         # if self.args.depths[1:]:
         #     self.D.set_new_alpha(self.args.alpha)
 
-        self.D.cuda(self.gpu).train()
+        self.D.cuda(self.gpu)
 
     # Override
     def load_next_batch(self):
