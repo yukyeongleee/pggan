@@ -87,12 +87,6 @@ class UnsupervisedDataset(Dataset):
     def __init__(self, dataset_root, scale_index=0, isMaster=False):
         self.imgpaths = [os.path.join(dataset_root, f) for f in os.listdir(dataset_root) if f.endswith('jpg')]
 
-
-        """
-        comment #5
-            scale_index 가 바뀔 때 이미지 크기도 바꿔줍니다.
-        """
-
         size = 2**(scale_index+2)
         self.transforms = transforms.Compose([
             transforms.Resize((size, size)),

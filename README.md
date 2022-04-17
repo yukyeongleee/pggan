@@ -1,44 +1,46 @@
 # PGGAN - Pytorch Implementation
 PyTorch Implementation of [Karras et al., "Progressive Growing of GANs for Improved Quality, Stability, and Variation" (ICLR 2018)](https://arxiv.org/abs/1710.10196).
 
------
+
 # Getting Started
 ## Dataset
 **37345 Korean front face images** were used for train. Images were resized to `2**(scale_index+2)` x `2**(scale_index+2)` before passed to the model as input.
 
 ## Installation
-We support `python3`. To install the dependencies run:
+* numpy
+* opencv-python
+* Pillow
+* torch
+* torchvision
+* urllib3
+* wandb
+
+ To install the dependencies run:
 ```bash
 pip install -r requirements.txt
 ```
+## Checkpoint 
+settings for training:
+* add here! 
 
------
 # Usage
 ## Train
 
 ```bash
-python train.py --model_id pggan --run_id simple_test
+python train.py --run_id simple_test
 ```
-If you want to use multi GPUs, add "--use_mGPU"
+If you want to load a checkpoint and retrain it, use `--ckpt_id` and `--ckpt_step`
 ```bash
-python train.py --model_id pggan --run_id simple_test --use_mGPU
+python train.py --run_id simple_test --ckpt_id={PATH/TO/CKPT} --ckpt_step {STEP}
 ```
+If you want to use multi GPUs, add `--use_mGPU`  
+If you want to use wandb, add `--use_wandb`
 
-If you want to use wandb, add "--use_wandb"
-```bash
-python train.py --model pggan --run_id simple_test --use_wandb
-```
-
-If you want to load a checkpoint and retrain it, use "--ckpt_id"
-```bash
-python train.py --model pggan --run_id simple_test --ckpt_id={PATH/TO/CKPT} 
-```
 ## Generate
 ```bash
-python test.py
+python demo.py
 ```
 
------
 # Overview
 ## Progressive Growing of GANs
 ![model_architecture](./figures/model_architecture.png)
@@ -85,12 +87,13 @@ for block in reversed(self.blocks):
 ## Objectives
 **WGAN-GP loss** is used. Both generator and discriminator are optimized per every minibatch. In addition, **drift loss**, which is used to keep the discriminator output from drifting too far away from 0, is added to the discriminator loss.
 
------
+
 ## TO DO
 - [x] implement fourth term of discriminator loss 
 - [x] implement test.py
 - [x] upload requirements.txt
 - [ ] upload checkpoint and sample output
+- [x] fix checkpoint loading part to automatically set scale & alpha jump related variables
 
 ## Authors
 * Yukyeong Lee - geo1106@innerverz.com

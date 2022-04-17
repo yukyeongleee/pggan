@@ -21,7 +21,7 @@ def CreateModel(gpu, args):
     model.set_data_iterator()
     model.set_validation()
     model.set_optimizers()
-    step = model.load_checkpoint()
+    step = model.load_checkpoint(args.ckpt_step)
     model.set_loss_collector()
 
     if args.isMaster:

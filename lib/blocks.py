@@ -175,11 +175,6 @@ class ProgressiveDiscriminatorBlock(nn.Module):
     def __init__(self, new_depth, prev_depth, equalized_lr=True, init_bias_to_zero=True):
         super(ProgressiveDiscriminatorBlock, self).__init__()
 
-        """
-        comment #4
-            list 안에 nn 모듈들을 추가하고, 마지막에 nn.Sequential 을 적용합니다.
-        """
-
         self.block = []
         self.block.append(EqualizedConv2d(new_depth,
                                               new_depth,

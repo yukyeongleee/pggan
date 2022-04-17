@@ -17,7 +17,6 @@ class WGANGPLoss(LossInterface):
     def get_loss_D(self, D_dict, discriminator):
         
         """
-        comment #7
             WGANGP 는 Discriminator 를 두 번 update 합니다. 
             (get_gradient_penalty 에서 한 번, L_D 를 이용해 model.D 를 업데이트 할 때 한 번)
         """
@@ -53,14 +52,7 @@ class WGANGPLoss(LossInterface):
             - weight (float): weight to apply to the penalty term
             - backward (bool): loss backpropagation
         """
-        
-        """
-        comment #6
-            numpy array 에 사용하는 함수와 tensor 에 사용하는 함수가 혼용되어 있었습니다.
-            ex) eps.expand_as vs eps.expand
-            일단 아래 링크를 보고 그대로 옮겨 왔는데, 혹시 수정했던 이유가 있으면 알려주세요!
-            https://github.com/facebookresearch/pytorch_GAN_zoo/blob/b75dee40918caabb4fe7ec561522717bf096a8cb/models/loss_criterions/gradient_losses.py
-        """
+
         if self.args.W_gp:
                 
             batchSize = D_dict["img_real"].size(0)        

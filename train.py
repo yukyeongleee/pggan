@@ -12,6 +12,7 @@ sys.path.append("./submodel/")
 def train(gpu, args): 
     torch.cuda.set_device(gpu)
     model, args, step = CreateModel(gpu, args)
+    load_ckpt = step != 0 # If True, scale and alpha jump related variables need not to be defined
 
     # Initialize wandb to gather and display loss on dashboard 
     if args.isMaster and args.use_wandb:
@@ -19,46 +20,40 @@ def train(gpu, args):
 
     # Training loop
     global_step = step if step else 0
-    scale_jump_step = args.max_step_at_scale[0] # 첫 번째 jump_step 설정
-    alpha_jump_step = args.alpha_jump_start[0] # 첫 번째 jump_step 설정
-    while global_step < args.max_step:
+    max_step = min(sum(args.max_step_at_scale), args.max_step)
 
-        """
-        comment #3
-
-        - pytorch_GAN_zoo/models/trainer/progressive_gan_trainer.py
-            - line 211: 
-                for scale in range(self.startScale, n_scales):
-                    ...
-                    
-        scale 이 한 단계 높아질 때마다 레이어들이 추가되고, alpha 값이 조정됩니다. 
-        코드가 복잡하게 구현되어 있는데 쉽게 풀어주겠습니다.
-        """
+    if not load_ckpt:
+        model.scale_index = 0
+        model.scale_jump_step = args.max_step_at_scale[0] # 첫 번째 jump_step 설정
+        model.alpha_jump_step = args.alpha_jump_start[0] # 첫 번째 jump_step 설정
+    
+    while global_step < max_step:
 
         # scale 이 바뀔 때
-        if global_step == scale_jump_step:
-            if args.scale_index < args.max_depths-1:
-                args.scale_index += 1
-                scale_jump_step += args.max_step_at_scale[args.scale_index]
+        if global_step == model.scale_jump_step:
+            if model.scale_index < args.max_depths-1:
+                model.scale_index += 1
+                model.scale_jump_step += args.max_step_at_scale[model.scale_index]
 
                 print(f"\nNOW global step is {global_step}")
-                print(f"scale index is updated to {args.scale_index}")
-                print(f"next scale jump step is {scale_jump_step}")
+                print(f"scale index is updated to {model.scale_index}")
+                print(f"next scale jump step is {model.scale_jump_step}")
 
                 # initialize parameters related to the alpha
-                model.G.alpha = 0
-                model.D.alpha = 0
-                args.alpha_index = 0
-                alpha_jump_step = global_step + args.alpha_jump_start[args.scale_index]
-                alpha_jump_value = 1/args.alpha_jump_Ntimes[args.scale_index]
+                if not load_ckpt: 
+                    model.G.alpha = 0
+                    model.D.alpha = 0
+                    model.alpha_index = 0
+                    model.alpha_jump_step = global_step + args.alpha_jump_start[model.scale_index]
+                alpha_jump_value = 1/args.alpha_jump_Ntimes[model.scale_index]
 
                 print(f"alpha index is initialized to 0")
-                print(f"next alpha jump step is set to {alpha_jump_step}")
+                print(f"next alpha jump step is set to {model.alpha_jump_step}")
                 print(f"alpha jump value is set to {alpha_jump_value}")
 
                 # add a block to net G and net D
-                model.G.add_block(args.depths[args.scale_index])
-                model.D.add_block(args.depths[args.scale_index])
+                model.G.add_block(args.depths[model.scale_index])
+                model.D.add_block(args.depths[model.scale_index])
                 model.G.cuda()
                 model.D.cuda()
 
@@ -67,16 +62,16 @@ def train(gpu, args):
                 model.set_data_iterator()
 
         # alpha 가 바뀔 때 (Linear mode)
-        if global_step == alpha_jump_step:
-            if args.scale_index > 0 and args.alpha_index < args.alpha_jump_Ntimes[args.scale_index]:
+        if global_step == model.alpha_jump_step:
+            if model.scale_index > 0 and model.alpha_index < args.alpha_jump_Ntimes[model.scale_index]:
                 model.G.alpha += alpha_jump_value
                 model.D.alpha += alpha_jump_value
-                alpha_jump_step = global_step + args.alpha_jump_interval[args.scale_index]
-                args.alpha_index += 1
+                model.alpha_jump_step = global_step + args.alpha_jump_interval[model.scale_index]
+                model.alpha_index += 1
 
                 print(f"\nNOW global step is {global_step}")
-                print(f"alpha index is updated to {args.alpha_index}")
-                print(f"next alpha jump step is {alpha_jump_step}")
+                print(f"alpha index is updated to {model.alpha_index}")
+                print(f"next alpha jump step is {model.alpha_jump_step}")
                 print(f"alpha is now {model.G.alpha}")
 
         result = model.train_step()

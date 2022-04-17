@@ -10,7 +10,9 @@ from pggan.loss import WGANGPLoss
 
 class ProgressiveGAN(ModelInterface):
     def __init__(self, args, gpu):
+        self.scale_index = 0
         self.downsample = torch.nn.AvgPool2d(3, stride=2, padding=[1, 1], count_include_pad=False)
+
         super().__init__(args, gpu)
         
     def initialize_models(self):
@@ -30,36 +32,6 @@ class ProgressiveGAN(ModelInterface):
                             self.args.output_dim,
                             self.args.equalized_lr)
 
-        """
-        comment #1
-            PGGAN 은 작은 스케일부터 조금씩 키워나가는데, 시작하자마자 add_block 을 반복하는게 이상했습니다. 
-            찾아보니 pgan_config.py 에 있는 depthScales 와 아래 for loop 에 있는 depthOtherScales 는 다르더라구요
-
-        - pytorch_GAN_zoo/models/trainer/standard_configurations/pgan_config.py
-            - line 45: 
-                _C.depthScales = [512, 512, 512, 512, 256, 128, 64, 32, 16]
-
-        - pytorch_GAN_zoo/models/progressive_gan.py
-            - line 46: 
-                self.config.depthOtherScales = []
-
-            - line 66-67: 
-                for depth in self.config.depthOtherScales:
-                    gnet.addScale(depth)
-
-            - line 70-71: 
-                if self.config.depthOtherScales:
-                    gnet.setNewAlpha(self.config.alpha)
-        
-        따라서 아래 내용은 없어도 괜찮을거 같습니다.
-        """
-        # # Add scales if necessary
-        # for depth in self.args.depths[1:]:
-        #     self.G.add_block(depth)
-
-        # # If new scales are added, give the generator a blending layer
-        # if self.args.depths[1:]:
-        #     self.G.set_new_alpha(self.args.alpha)
 
         self.G.cuda(self.gpu)
 
@@ -72,19 +44,65 @@ class ProgressiveGAN(ModelInterface):
                                 self.args.input_dim, # input_dim output_dim
                                 self.args.equalized_lr)
 
-        """
-        comment #2
-            comment #1 과 같은 이유로 아래 내용도 주석 처리 합니다. 
-        """
-        # # Add scales if necessary
-        # for depth in self.args.depths[1:]:
-        #     self.D.add_block(depth)
-
-        # # If new scales are added, give the generator a blending layer
-        # if self.args.depths[1:]:
-        #     self.D.set_new_alpha(self.args.alpha)
-
         self.D.cuda(self.gpu)
+
+    # Override
+    def load_checkpoint(self, step=-1):
+        """
+        Load pretrained parameters from checkpoint to the initialized models.
+        """
+        # No checkpoint
+        if step == -1:
+            return 0
+
+        scale_jump_step = 0
+        for scale_index, max_step_at_scale in enumerate(self.args.max_step_at_scale):
+
+            scale_jump_step += max_step_at_scale
+
+            if step >= scale_jump_step:             
+                self.G.add_block(self.args.depths[scale_index + 1]) 
+                self.D.add_block(self.args.depths[scale_index + 1]) 
+                self.G.cuda()
+                self.D.cuda()
+
+            else:
+                self.scale_index = scale_index
+                self.scale_jump_step = scale_jump_step
+
+                self.G.alpha = 0
+                self.D.alpha = 0
+                self.alpha_index = 0
+                self.alpha_jump_step = scale_jump_step - max_step_at_scale + self.args.alpha_jump_start[scale_index]
+
+                # Check whether the given checkpoint matches with model parameters
+                ckpt_path = f'{self.args.save_root}/{self.args.ckpt_id}/ckpt/G_{step}.pt'
+                ckpt_dict = torch.load(ckpt_path, map_location=torch.device('cuda'))
+                A = set(ckpt_dict['model'].keys())
+                B = set(self.G.state_dict().keys())
+                assert A == B
+
+                # No blending at Scale 0
+                if scale_index > 0:
+                    step_at_scale = step - self.alpha_jump_step 
+                    
+                    if step_at_scale >= 0:       
+                        self.alpha_index = min(step_at_scale // self.args.alpha_jump_interval[scale_index] + 1,  self.args.alpha_jump_Ntimes[scale_index])
+                        self.alpha_jump_step += self.alpha_index * self.args.alpha_jump_interval[scale_index]
+                        alpha = self.alpha_index / self.args.alpha_jump_Ntimes[scale_index]
+                        self.G.alpha = alpha
+                        self.D.alpha = alpha
+
+                break
+
+        checkpoint.load_checkpoint(self.args, self.G, self.opt_G, name='G', global_step=step)
+        checkpoint.load_checkpoint(self.args, self.D, self.opt_D, name='D', global_step=step)
+
+        # Resize real images from dataset
+        self.set_dataset()
+        self.set_data_iterator()
+
+        return step
 
     # Override
     def load_next_batch(self):
@@ -106,7 +124,7 @@ class ProgressiveGAN(ModelInterface):
         Initialize dataset using the dataset paths specified in the command line arguments.
         CelebA: 202,599 face images of the size 178×218 from 10,177 celebrities
         """
-        dataset = UnsupervisedDataset(self.args.dataset_root, self.args.scale_index, self.args.isMaster)
+        dataset = UnsupervisedDataset(self.args.dataset_root, self.scale_index, self.args.isMaster)
         N = len(dataset)
         N_train = round(N * 0.7)
         self.train_dataset, self.valid_dataset = torch.utils.data.random_split(dataset, [N_train, N - N_train])

@@ -13,11 +13,10 @@ class BaseOptions:
         # Experiment id
         self.parser.add_argument('--run_id', type=str, required=True) 
         self.parser.add_argument('--gpu_id', type=int, default=0) 
-        self.parser.add_argument('--ckpt_id', type=str, default=None)
         self.parser.add_argument('--model_id', type=str, default='pggan')
+        self.parser.add_argument('--ckpt_id', type=str, default=None)
+        self.parser.add_argument('--ckpt_step', type=int, default=-1)
             
-        # self.parser.add_argument('--valid_dataset_root', type=str, \
-        #     default=None, help="dir path or None")
         self.parser.add_argument('--validation', action='store_true')
 
         # Log
