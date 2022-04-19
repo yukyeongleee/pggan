@@ -138,23 +138,22 @@ class Generator(nn.Module):
         # To RGB 
         # If there are 2 blocks and blending is required (alpha > 0)
         if self.alpha > 0 and len(self.blocks) == 1:
-            x_prev = self.toRGB_blocks[-2](x, apply_upscale=True)
+            x_up = self.toRGB_blocks[-2](x, apply_upscale=True)
 
         # Upper scales
         for i, block in enumerate(self.blocks, 0):
             x = block(x)
-            # print(">> intermediates", i, x.shape)
             # To RGB
             # If there are more than 2 blocks and blending is required (alpha > 0)
             if self.alpha > 0 and i == (len(self.blocks) - 2):
-                x_prev = self.toRGB_blocks[-2](x, apply_upscale=True)
+                x_up = self.toRGB_blocks[-2](x, apply_upscale=True)
 
         # To RGB (No need to upscale for)
         x = self.toRGB_blocks[-1](x)
 
         # Blending with the lower resolution output when alpha > 0
         if self.alpha > 0:
-            x = self.alpha * x_prev + (1.0 - self.alpha) * x
+            x = (1.0 - self.alpha) * x_up + self.alpha * x
 
         if self.last_activation is not None:
             x = self.last_activation(x)
@@ -249,7 +248,7 @@ class Discriminator(nn.Module):
     def forward(self, x, get_feature = False):
         # Alpha blending
         if self.alpha > 0 and len(self.fromRGB_blocks) > 1:
-            y = self.fromRGB_blocks[-2](x, apply_downscale=True)
+            x_down = self.fromRGB_blocks[-2](x, apply_downscale=True)
 
         # From RGB layer
         x = self.fromRGB_blocks[-1](x)
@@ -262,7 +261,7 @@ class Discriminator(nn.Module):
 
             if apply_merge:
                 apply_merge = False
-                x = self.alpha * y + (1 - self.alpha) * x
+                x = (1 - self.alpha) * x_down + self.alpha * x
 
         # Minibatch standard deviation
         x = self.minibatch_normalization_block(x)

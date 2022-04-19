@@ -20,14 +20,14 @@ def train(gpu, args):
 
     # Training loop
     global_step = step if step else 0
-    max_step = min(sum(args.max_step_at_scale), args.max_step)
+    args.max_step = min(sum(args.max_step_at_scale), args.max_step)
 
     if not load_ckpt:
         model.scale_index = 0
         model.scale_jump_step = args.max_step_at_scale[0] # 첫 번째 jump_step 설정
         model.alpha_jump_step = args.alpha_jump_start[0] # 첫 번째 jump_step 설정
     
-    while global_step < max_step:
+    while global_step < args.max_step:
 
         # scale 이 바뀔 때
         if global_step == model.scale_jump_step:

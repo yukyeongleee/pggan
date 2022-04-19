@@ -8,7 +8,7 @@ class TrainOptions(BaseOptions):
 
         # Hyperparameters
         self.parser.add_argument('--batch_per_gpu', type=str, default=16)
-        self.parser.add_argument('--max_step', type=str, default=1100000)
+        self.parser.add_argument('--max_step', type=str, default=2000000)
         self.parser.add_argument('--same_prob', type=float, default=0.2)
 
         # Dataset
@@ -44,7 +44,7 @@ class TrainOptions(BaseOptions):
         # self.parser.add_argument('--scale_index', type=int, default=0)
         self.parser.add_argument('--max_step_at_scale', type=list, \
             # default=[48000, 96000, 96000, 96000, 96000, 96000, 96000, 96000, 200000])
-            default=[48000, 96000, 96000, 96000, 96000, 96000, 150000, 200000, 200000])
+            default=[48000, 96000, 96000, 96000, 96000, 96000, 200000, 300000, 300000])
         
         ## Alpha
         self.parser.add_argument('--alpha', type=float, default=0)

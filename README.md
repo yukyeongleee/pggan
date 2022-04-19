@@ -55,21 +55,21 @@ for i, block in enumerate(self.blocks, 0):
   
     # Lower scale RGB image
     if self.alpha > 0 and i == (len(self.blocks) - 2):
-        x_prev = self.toRGB_blocks[-2](x, apply_upscale=True)
+        x_up = self.toRGB_blocks[-2](x, apply_upscale=True)
 
 # Current scale RGB image
 x = self.toRGB_blocks[-1](x)
 
 # Blend!
 if self.alpha > 0:
-    x = self.alpha * x_prev + (1.0 - self.alpha) * x
+    x = self.alpha * x + (1.0 - self.alpha) * x_up
 ```
  
  On the other hand, the discriminator downscales the current RGB input by 2 and pass it to the previous block. In this case, blending occurs in the feature domain.  
 ```python
 # Lower scale features
 if self.alpha > 0 and len(self.fromRGB_blocks) > 1:
-    y = self.fromRGB_blocks[-2](x, apply_downscale=True)
+    x_down = self.fromRGB_blocks[-2](x, apply_downscale=True)
 
 # Current scale features
 x = self.fromRGB_blocks[-1](x)
@@ -81,12 +81,30 @@ for block in reversed(self.blocks):
     # Blend!
     if apply_merge:
         apply_merge = False
-        x = self.alpha * y + (1 - self.alpha) * x
+        x = self.alpha * x + (1 - self.alpha) * x_down
 ```
 
 ## Objectives
 **WGAN-GP loss** is used. Both generator and discriminator are optimized per every minibatch. In addition, **drift loss**, which is used to keep the discriminator output from drifting too far away from 0, is added to the discriminator loss.
 
+# Versions
+## Issues
+### Wrong Blending 
+Immediately after the scale jump, meaningless images are generated.   
+> Before:   
+![before](./figures/issue_blending_before.jpg)  
+After:   
+![after](./figures/issue_blending_after.jpg)
+
+This is because of the miswritten blending equations in both generator and discriminator. Keep in mind that immediately after the scale jump, the alpha is set to 0. Now the equations are fixed. 
+```python
+# Before
+if self.alpha > 0:
+            x = self.alpha * x_up + (1.0 - self.alpha) * x
+# After
+if self.alpha > 0:
+            x = (1.0 - self.alpha) * x_up + self.alpha * x
+```
 
 ## TO DO
 - [x] implement fourth term of discriminator loss 
@@ -95,10 +113,10 @@ for block in reversed(self.blocks):
 - [ ] upload checkpoint and sample output
 - [x] fix checkpoint loading part to automatically set scale & alpha jump related variables
 
-## Authors
+# Authors
 * Yukyeong Lee - geo1106@innerverz.com
 * Wonjong Ryu
 
-## Acknowledgements
+# Acknowledgements
 * Karras et al. "Progressive Growing of GANs for Improved Quality, Stability, and Variation" (ICLR 2018) [[paper](https://arxiv.org/abs/1710.10196)][[code](https://github.com/tkarras/progressive_growing_of_gans)]
 * [facebookresearch/pytorch_GAN_zoo](https://github.com/facebookresearch/pytorch_GAN_zoo) 
