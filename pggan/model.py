@@ -189,7 +189,7 @@ class ProgressiveGAN(ModelInterface):
         loss_G = self.loss_collector.get_loss_G(G_dict)
         utils.update_net(self.opt_G, loss_G)
 
-        return [img_fake]
+        return [img_real, img_fake]
 
     def validation(self, step):
         with torch.no_grad():

@@ -45,6 +45,7 @@ def train(gpu, args):
                     model.D.alpha = 0
                     model.alpha_index = 0
                     model.alpha_jump_step = global_step + args.alpha_jump_start[model.scale_index]
+                
                 alpha_jump_value = 1/args.alpha_jump_Ntimes[model.scale_index]
 
                 print(f"alpha index is initialized to 0")
@@ -64,6 +65,7 @@ def train(gpu, args):
         # alpha 가 바뀔 때 (Linear mode)
         if global_step == model.alpha_jump_step:
             if model.scale_index > 0 and model.alpha_index < args.alpha_jump_Ntimes[model.scale_index]:
+                alpha_jump_value = 1/args.alpha_jump_Ntimes[model.scale_index] # Required when the loaded ckpt is from the scale_jump_step
                 model.G.alpha += alpha_jump_value
                 model.D.alpha += alpha_jump_value
                 model.alpha_jump_step = global_step + args.alpha_jump_interval[model.scale_index]
