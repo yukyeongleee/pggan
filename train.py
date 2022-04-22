@@ -40,17 +40,17 @@ def train(gpu, args):
                 print(f"next scale jump step is {model.scale_jump_step}")
 
                 # initialize parameters related to the alpha
-                if not load_ckpt: 
-                    model.G.alpha = 0
-                    model.D.alpha = 0
-                    model.alpha_index = 0
-                    model.alpha_jump_step = global_step + args.alpha_jump_start[model.scale_index]
-                
-                alpha_jump_value = 1/args.alpha_jump_Ntimes[model.scale_index]
+                # if not load_ckpt: 
+                model.G.alpha = 0
+                model.D.alpha = 0
+                model.alpha_index = 0
+                model.alpha_jump_step = global_step + args.alpha_jump_start[model.scale_index]
+
+                model.alpha_jump_value = 1/args.alpha_jump_Ntimes[model.scale_index]
 
                 print(f"alpha index is initialized to 0")
                 print(f"next alpha jump step is set to {model.alpha_jump_step}")
-                print(f"alpha jump value is set to {alpha_jump_value}")
+                print(f"alpha jump value is set to {model.alpha_jump_value}")
 
                 # add a block to net G and net D
                 model.G.add_block(args.depths[model.scale_index])
@@ -65,9 +65,9 @@ def train(gpu, args):
         # alpha 가 바뀔 때 (Linear mode)
         if global_step == model.alpha_jump_step:
             if model.scale_index > 0 and model.alpha_index < args.alpha_jump_Ntimes[model.scale_index]:
-                alpha_jump_value = 1/args.alpha_jump_Ntimes[model.scale_index] # Required when the loaded ckpt is from the scale_jump_step
-                model.G.alpha += alpha_jump_value
-                model.D.alpha += alpha_jump_value
+                # model.alpha_jump_value = 1/args.alpha_jump_Ntimes[model.scale_index] # Required when the loaded ckpt is from the scale_jump_step
+                model.G.alpha += model.alpha_jump_value
+                model.D.alpha += model.alpha_jump_value
                 model.alpha_jump_step = global_step + args.alpha_jump_interval[model.scale_index]
                 model.alpha_index += 1
 

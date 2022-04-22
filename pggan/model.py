@@ -74,6 +74,7 @@ class ProgressiveGAN(ModelInterface):
                 self.D.alpha = 0
                 self.alpha_index = 0
                 self.alpha_jump_step = scale_jump_step - max_step_at_scale + self.args.alpha_jump_start[scale_index]
+                self.alpha_jump_value = 1 / self.args.alpha_jump_Ntimes[scale_index]
 
                 # Check whether the given checkpoint matches with model parameters
                 ckpt_path = f'{self.args.save_root}/{self.args.ckpt_id}/ckpt/G_{step}.pt'
@@ -89,7 +90,7 @@ class ProgressiveGAN(ModelInterface):
                     if step_at_scale >= 0:       
                         self.alpha_index = min(step_at_scale // self.args.alpha_jump_interval[scale_index] + 1,  self.args.alpha_jump_Ntimes[scale_index])
                         self.alpha_jump_step += self.alpha_index * self.args.alpha_jump_interval[scale_index]
-                        alpha = self.alpha_index / self.args.alpha_jump_Ntimes[scale_index]
+                        alpha = self.alpha_index * self.alpha_jump_value
                         self.G.alpha = alpha
                         self.D.alpha = alpha
 
