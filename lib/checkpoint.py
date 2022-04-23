@@ -26,6 +26,9 @@ def save_checkpoint(args, model, optimizer, name, global_step):
     ckpt_dict['model'] = model.state_dict()
     ckpt_dict['optimizer'] = optimizer.state_dict()
     ckpt_dict['step'] = global_step
+    # print(args)
+    # print(args.__dict__)
+    ckpt_dict['args'] = args
 
     dir_path = f'{args.save_root}/{args.run_id}/ckpt'
     os.makedirs(dir_path, exist_ok=True)

@@ -57,7 +57,6 @@ class ProgressiveGAN(ModelInterface):
 
         scale_jump_step = 0
         for scale_index, max_step_at_scale in enumerate(self.args.max_step_at_scale):
-
             scale_jump_step += max_step_at_scale
 
             if step >= scale_jump_step:             
@@ -153,7 +152,6 @@ class ProgressiveGAN(ModelInterface):
         # print("img_real", img_real.shape) # (8, 3, 256, 256)
         n_samples = len(img_real)
 
-
         ###########
         # Train D #
         ###########
@@ -172,7 +170,7 @@ class ProgressiveGAN(ModelInterface):
             "pred_fake": pred_fake,
         }
 
-        loss_D = self.loss_collector.get_loss_D(D_dict, self.D)
+        loss_D = self.loss_collector.get_loss_D(D_dict)
         utils.update_net(self.opt_D, loss_D)
 
         ###########
@@ -181,6 +179,7 @@ class ProgressiveGAN(ModelInterface):
 
         latent_input = torch.randn(n_samples, self.args.latent_dim).to(self.gpu)
         img_fake = self.G(latent_input)
+        # img_fake, x_only, x_up = self.G(latent_input)
         pred_fake, _ = self.D(img_fake, True)
 
         G_dict = {
@@ -191,6 +190,7 @@ class ProgressiveGAN(ModelInterface):
         utils.update_net(self.opt_G, loss_G)
 
         return [img_real, img_fake]
+        # return [img_real, img_fake, x_only, x_up]
 
     def validation(self, step):
         with torch.no_grad():

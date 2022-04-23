@@ -34,10 +34,11 @@ def train(gpu, args):
             if model.scale_index < args.max_depths-1:
                 model.scale_index += 1
                 model.scale_jump_step += args.max_step_at_scale[model.scale_index]
-
-                print(f"\nNOW global step is {global_step}")
-                print(f"scale index is updated to {model.scale_index}")
-                print(f"next scale jump step is {model.scale_jump_step}")
+                
+                if args.isMaster:
+                    print(f"\nNOW global step is {global_step}")
+                    print(f"scale index is updated to {model.scale_index}")
+                    print(f"next scale jump step is {model.scale_jump_step}")
 
                 # initialize parameters related to the alpha
                 # if not load_ckpt: 
@@ -48,9 +49,10 @@ def train(gpu, args):
 
                 model.alpha_jump_value = 1/args.alpha_jump_Ntimes[model.scale_index]
 
-                print(f"alpha index is initialized to 0")
-                print(f"next alpha jump step is set to {model.alpha_jump_step}")
-                print(f"alpha jump value is set to {model.alpha_jump_value}")
+                if args.isMaster:
+                    print(f"alpha index is initialized to 0")
+                    print(f"next alpha jump step is set to {model.alpha_jump_step}")
+                    print(f"alpha jump value is set to {model.alpha_jump_value}")
 
                 # add a block to net G and net D
                 model.G.add_block(args.depths[model.scale_index])
@@ -61,6 +63,7 @@ def train(gpu, args):
                 # dataset and data iterator
                 model.set_dataset()
                 model.set_data_iterator()
+                model.set_optimizers()
 
         # alpha 가 바뀔 때 (Linear mode)
         if global_step == model.alpha_jump_step:
@@ -71,10 +74,11 @@ def train(gpu, args):
                 model.alpha_jump_step = global_step + args.alpha_jump_interval[model.scale_index]
                 model.alpha_index += 1
 
-                print(f"\nNOW global step is {global_step}")
-                print(f"alpha index is updated to {model.alpha_index}")
-                print(f"next alpha jump step is {model.alpha_jump_step}")
-                print(f"alpha is now {model.G.alpha}")
+                if args.isMaster:
+                    print(f"\nNOW global step is {global_step}")
+                    print(f"alpha index is updated to {model.alpha_index}")
+                    print(f"next alpha jump step is {model.alpha_jump_step}")
+                    print(f"alpha is now {model.G.alpha}")
 
         result = model.train_step()
 

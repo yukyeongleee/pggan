@@ -13,30 +13,42 @@ class WGANGPLoss(LossInterface):
 
         return L_G
 
-
-    def get_loss_D(self, D_dict, discriminator):
-        
-        """
-            WGANGP 는 Discriminator 를 두 번 update 합니다. 
-            (get_gradient_penalty 에서 한 번, L_D 를 이용해 model.D 를 업데이트 할 때 한 번)
-        """
-
+    def get_loss_D(self, D_dict):
+        # Real 
         L_D_real = Loss.get_BCE_loss(D_dict["pred_real"], True)
         L_D_fake = Loss.get_BCE_loss(D_dict["pred_fake"], False)
-        L_D = L_D_real + L_D_fake
+        L_reg = Loss.get_r1_reg(L_D_real, D_dict["img_real"])
+        L_D = L_D_real + L_D_fake + L_reg
         
-        # WGAN-GP gradient loss
-        L_D_gp = self.get_gradient_penalty(D_dict, discriminator)
-        
-        # Drift loss (the fourth term)
-        L_D_eps = self.get_drift_loss(D_dict)
-
         self.loss_dict["L_D_real"] = round(L_D_real.mean().item(), 4)
         self.loss_dict["L_D_fake"] = round(L_D_fake.mean().item(), 4)
-        self.loss_dict["L_D_gp"] = round(L_D_gp, 4)
-        self.loss_dict["L_D_eps"] = round(L_D_eps, 4)
-        self.loss_dict["L_D"] = round(L_D.item() + L_D_gp + L_D_eps, 4)
+        self.loss_dict["L_D"] = round(L_D.item(), 4)
+
         return L_D
+
+    # def get_loss_D(self, D_dict, discriminator):
+        
+    #     """
+    #         WGANGP 는 Discriminator 를 두 번 update 합니다. 
+    #         (get_gradient_penalty 에서 한 번, L_D 를 이용해 model.D 를 업데이트 할 때 한 번)
+    #     """
+
+    #     L_D_real = Loss.get_BCE_loss(D_dict["pred_real"], True)
+    #     L_D_fake = Loss.get_BCE_loss(D_dict["pred_fake"], False)
+    #     L_D = L_D_real + L_D_fake
+        
+    #     # WGAN-GP gradient loss
+    #     L_D_gp = self.get_gradient_penalty(D_dict, discriminator)
+        
+    #     # Drift loss (the fourth term)
+    #     L_D_eps = self.get_drift_loss(D_dict)
+
+    #     self.loss_dict["L_D_real"] = round(L_D_real.mean().item(), 4)
+    #     self.loss_dict["L_D_fake"] = round(L_D_fake.mean().item(), 4)
+    #     self.loss_dict["L_D_gp"] = round(L_D_gp, 4)
+    #     self.loss_dict["L_D_eps"] = round(L_D_eps, 4)
+    #     self.loss_dict["L_D"] = round(L_D.item() + L_D_gp + L_D_eps, 4)
+    #     return L_D
 
 
     def get_gradient_penalty(self, D_dict, discriminator, backward=True):
