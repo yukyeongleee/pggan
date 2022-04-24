@@ -256,7 +256,7 @@ class Discriminator(nn.Module):
  
         # Caution: we must explore the layers group in reverse order !
         # Explore all scales before 0
-        apply_merge = len(self.blocks) > 1
+        apply_merge = len(self.blocks) > 0
         for block in reversed(self.blocks):
             x = block(x)
 
@@ -275,32 +275,3 @@ class Discriminator(nn.Module):
 
         return out, x
 
-
-    # def forward(self, x, get_feature = False):
-    #     # Alpha blending
-    #     if self.alpha > 0 and len(self.fromRGB_blocks) > 1:
-    #         x_down = self.fromRGB_blocks[-2](x, apply_downscale=True)
-
-    #     # From RGB layer
-    #     x = self.fromRGB_blocks[-1](x)
- 
-    #     # Caution: we must explore the layers group in reverse order !
-    #     # Explore all scales before 0
-    #     apply_merge = self.alpha > 0 and len(self.blocks) > 1
-    #     for block in reversed(self.blocks):
-    #         x = block(x)
-
-    #         if apply_merge:
-    #             apply_merge = False
-    #             x = (1 - self.alpha) * x_down + self.alpha * x
-
-    #     # Minibatch standard deviation
-    #     x = self.minibatch_normalization_block(x)
-
-    #     # Last layer
-    #     out = self.decision_layer(x)
-
-    #     if not get_feature:
-    #         return out
-
-    #     return out, x

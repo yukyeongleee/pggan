@@ -1,5 +1,5 @@
 import torch
-from torch.utils.data import DataLoader
+import torch.nn.functional as F
 
 from lib import checkpoint, utils
 from lib.model import ModelInterface
@@ -176,8 +176,10 @@ class ProgressiveGAN(ModelInterface):
     def change_alpha(self, global_step): 
 
         self.alpha_index += 1
-        self.G.alpha += round(self.alpha_jump_value, 4)
-        self.D.alpha += round(self.alpha_jump_value, 4)
+        self.G.alpha += self.alpha_jump_value
+        self.D.alpha += self.alpha_jump_value
+        self.G.alpha = round(self.G.alpha, 4)
+        self.D.alpha = round(self.D.alpha, 4)
         
         # check if alpha_index is reached to alpha_jump_Ntimes
         if self.alpha_index == self.args.alpha_jump_Ntimes[self.scale_index]:
@@ -212,6 +214,11 @@ class ProgressiveGAN(ModelInterface):
         ###########
         # Train D #
         ###########
+        if self.scale_index:
+            low_img_real = F.avg_pool2d(img_real, (2, 2))
+            low_img_real = F.upsample(low_img_real, scale_factor=2, mode='nearest')
+
+            img_real =  (1-self.D.alpha) * low_img_real + self.D.alpha * img_real
 
         img_real.requires_grad_()
         pred_real = self.D(img_real)
@@ -249,6 +256,9 @@ class ProgressiveGAN(ModelInterface):
 
     def save_image(self, images, step):
         utils.save_image(self.args, step, "imgs", images)
+
+    def validation(self):
+        pass
         
     @property
     def loss_collector(self):

@@ -2,7 +2,6 @@ import torch
 import wandb
 import os
 import sys
-from lib.options import BaseOptions
 from lib.model_loader import CreateModel
 from lib.config import Config
 

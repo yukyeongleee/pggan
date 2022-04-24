@@ -74,7 +74,7 @@ decision_layer_size: 1
 
 # ckpt path
 # blank is None, but None is "None"
-# ckpt_id: r1reg
-# ckpt_step: 2000
-ckpt_id: 
-ckpt_step: 
+# ckpt_id: 
+# ckpt_step: 
+ckpt_id: run0424
+ckpt_step: 30000
