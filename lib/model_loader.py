@@ -6,8 +6,6 @@ def CreateModel(gpu, args):
     model = None
     if args.model_id == 'pggan':
         from pggan.model import ProgressiveGAN
-        from pggan.options import TrainOptions
-        args = TrainOptions().parse()
         model = ProgressiveGAN(args, gpu)
         
     args.isMaster = gpu == 0
@@ -21,10 +19,12 @@ def CreateModel(gpu, args):
     model.set_data_iterator()
     model.set_validation()
     model.set_optimizers()
-    step = model.load_checkpoint(args.ckpt_step)
+    
+    if args.ckpt_id is not None:
+        model.load_checkpoint()
     model.set_loss_collector()
 
     if args.isMaster:
         print(f'model {args.model_id} has created')
         
-    return model, args, step
+    return model, args

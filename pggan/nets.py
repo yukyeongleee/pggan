@@ -78,7 +78,6 @@ class Generator(nn.Module):
 
         # Last layer activation function
         self.last_activation = last_activation
-        
 
 
     def init_format_layer(self, latent_dim):
@@ -119,13 +118,8 @@ class Generator(nn.Module):
                                             equalized_lr=self.equalized_lr, 
                                             init_bias_to_zero=self.init_bias_to_zero))
 
-
     def forward(self, x):
         
-        # if self.blocks:
-        #     print(self)
-        #     assert(1==2)
-
         ## Normalize the input ?
         if self.apply_pixel_norm:
             x = self.pixel_norm(x)
@@ -252,6 +246,7 @@ class Discriminator(nn.Module):
                                              init_bias_to_zero=self.init_bias_to_zero)
 
     def forward(self, x, get_feature = False):
+
         # Alpha blending
         if len(self.blocks):
             x_down = self.fromRGB_blocks[-2](x, apply_downscale=True)
@@ -261,7 +256,7 @@ class Discriminator(nn.Module):
  
         # Caution: we must explore the layers group in reverse order !
         # Explore all scales before 0
-        apply_merge = self.alpha > 0 and len(self.blocks) > 1
+        apply_merge = len(self.blocks) > 1
         for block in reversed(self.blocks):
             x = block(x)
 
