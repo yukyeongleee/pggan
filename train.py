@@ -2,81 +2,48 @@ import torch
 import wandb
 import os
 import sys
-from lib.options import BaseOptions
 from lib.model_loader import CreateModel
+from lib.config import Config
 
 sys.path.append("./")
 sys.path.append("./submodel/")
 
-
 def train(gpu, args): 
+    # convert dictionary to class
+    args = Config(args)
+
+    # This line must be placed before the "CreateModel" method because it includes load_checkpoint.
+    # If the previous checkpoint is loaded, args.ckpt_id and args.ckpt_step will be overwritten.
+    load_ckpt = args.ckpt_id is not None # If True, scale- and alpha-related-variables are not required to be defined
+
     torch.cuda.set_device(gpu)
-    model, args, step = CreateModel(gpu, args)
-    load_ckpt = step != 0 # If True, scale and alpha jump related variables need not to be defined
+    model, args = CreateModel(gpu, args)
 
     # Initialize wandb to gather and display loss on dashboard 
     if args.isMaster and args.use_wandb:
         wandb.init(project=args.model_id, name=args.run_id)
 
+    # set scale- and alpha-related-variables
+    if not load_ckpt:
+        model.alpha = 0
+        model.alpha_index = 0
+        model.scale_index = 0
+        model.alpha_jump_value = 0
+        model.next_scale_jump_step = args.max_step_at_scale[0] # 첫 번째 scale jump_step 설정
+        model.next_alpha_jump_step = args.alpha_jump_start[0] # 첫 번째 alpha jump_step 설정
+    
     # Training loop
-    global_step = step if step else 0
+    global_step = model.global_step if load_ckpt else 0
     args.max_step = min(sum(args.max_step_at_scale), args.max_step)
 
-    if not load_ckpt:
-        model.scale_index = 0
-        model.scale_jump_step = args.max_step_at_scale[0] # 첫 번째 jump_step 설정
-        model.alpha_jump_step = args.alpha_jump_start[0] # 첫 번째 jump_step 설정
-    
     while global_step < args.max_step:
 
-        # scale 이 바뀔 때
-        if global_step == model.scale_jump_step:
-            if model.scale_index < args.max_depths-1:
-                model.scale_index += 1
-                model.scale_jump_step += args.max_step_at_scale[model.scale_index]
-
-                print(f"\nNOW global step is {global_step}")
-                print(f"scale index is updated to {model.scale_index}")
-                print(f"next scale jump step is {model.scale_jump_step}")
-
-                # initialize parameters related to the alpha
-                # if not load_ckpt: 
-                model.G.alpha = 0
-                model.D.alpha = 0
-                model.alpha_index = 0
-                model.alpha_jump_step = global_step + args.alpha_jump_start[model.scale_index]
-
-                model.alpha_jump_value = 1/args.alpha_jump_Ntimes[model.scale_index]
-
-                print(f"alpha index is initialized to 0")
-                print(f"next alpha jump step is set to {model.alpha_jump_step}")
-                print(f"alpha jump value is set to {model.alpha_jump_value}")
-
-                # add a block to net G and net D
-                model.G.add_block(args.depths[model.scale_index])
-                model.D.add_block(args.depths[model.scale_index])
-                model.G.cuda()
-                model.D.cuda()
-
-                # dataset and data iterator
-                model.set_dataset()
-                model.set_data_iterator()
-
-        # alpha 가 바뀔 때 (Linear mode)
-        if global_step == model.alpha_jump_step:
-            if model.scale_index > 0 and model.alpha_index < args.alpha_jump_Ntimes[model.scale_index]:
-                # model.alpha_jump_value = 1/args.alpha_jump_Ntimes[model.scale_index] # Required when the loaded ckpt is from the scale_jump_step
-                model.G.alpha += model.alpha_jump_value
-                model.D.alpha += model.alpha_jump_value
-                model.alpha_jump_step = global_step + args.alpha_jump_interval[model.scale_index]
-                model.alpha_index += 1
-
-                print(f"\nNOW global step is {global_step}")
-                print(f"alpha index is updated to {model.alpha_index}")
-                print(f"next alpha jump step is {model.alpha_jump_step}")
-                print(f"alpha is now {model.G.alpha}")
-
-        result = model.train_step()
+        """
+        Fixes #2.
+        Alpha-related-lines are moved to the model.check_alpha method.
+        """
+        model.check_jump(global_step)
+        intermediate_images = model.train_step()
 
         if args.isMaster:
             # Save and print loss
@@ -87,10 +54,10 @@ def train(gpu, args):
 
             # Save image
             if global_step % args.test_cycle == 0:
-                model.save_image(result, global_step)
+                model.save_image(intermediate_images, global_step)
 
-                if args.validation:
-                    model.validation(global_step) 
+                if args.use_validation:
+                    model.validation(global_step)
 
             # Save checkpoint parameters 
             if global_step % args.ckpt_cycle == 0:
@@ -100,13 +67,28 @@ def train(gpu, args):
 
 
 if __name__ == "__main__":
-    args = BaseOptions().parse()
-    os.makedirs(args.save_root, exist_ok=True)
+
+    """
+    Fixes #1
+    Argparser is relaced with Configs.
+    config.py is added in ./lib directory.
+    """
+    # load config
+    config_path = "configs.yaml"
+    args = Config.from_yaml(config_path)
+    
+    # update configs
+    args.run_id = sys.argv[1] # command line: python train.py {run_id}
+    args.gpu_num = torch.cuda.device_count()
+    
+    # save config
+    os.makedirs(f"{args.save_root}/{args.run_id}", exist_ok=True)
+    args.save_yaml(config_path)
 
     # Set up multi-GPU training
     if args.use_mGPU:  
-        torch.multiprocessing.spawn(train, nprocs=args.gpu_num, args=(args, ))
+        torch.multiprocessing.spawn(train, nprocs=args.gpu_num, args=(args.__dict__, ))
 
     # Set up single GPU training
     else:
-        train(args.gpu_id, args)
+        train(gpu=0, args=args.__dict__)

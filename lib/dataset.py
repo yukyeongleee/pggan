@@ -84,8 +84,19 @@ class FaceDatasetValid(Dataset):
 
 
 class UnsupervisedDataset(Dataset):
-    def __init__(self, dataset_root, scale_index=0, isMaster=False):
-        self.imgpaths = [os.path.join(dataset_root, f) for f in os.listdir(dataset_root) if f.endswith('jpg')]
+    def __init__(self, dataset_root_list, scale_index=0, isMaster=False):
+        self.datasets = []
+        self.N = []
+ 
+        for dataset_root in dataset_root_list:
+            imgpaths_in_root = glob.glob(f'{dataset_root}/*.*g')
+
+            for root, dirs, _ in os.walk(dataset_root):
+                for dir in dirs:
+                    imgpaths_in_root += glob.glob(f'{root}/{dir}/*.*g')
+
+            self.datasets.append(imgpaths_in_root)
+            self.N.append(len(imgpaths_in_root))
 
         size = 2**(scale_index+2)
         self.transforms = transforms.Compose([
@@ -103,9 +114,14 @@ class UnsupervisedDataset(Dataset):
             print(f"Dataset of {self.__len__()} images constructed for the training.")
 
     def __len__(self):
-        return len(self.imgpaths)
+        return sum(self.N)
 
-    def __getitem__(self, idx):
-        imgpath = self.imgpaths[idx]
+    def __getitem__(self, item):
+        idx = 0
+        while item >= self.N[idx]:
+            item -= self.N[idx]
+            idx += 1
+        imgpath = self.datasets[idx][item]
+
         X = Image.open(imgpath).convert("RGB")
         return self.transforms(X)

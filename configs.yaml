@@ -1,0 +1,80 @@
+# model 
+model_id: pggan
+
+# multi-GPUs
+use_mGPU: True
+
+# wandb
+# isMaster: True
+use_wandb: True
+wandb_alert_thres: 1000
+
+# validation
+use_validation: False
+valid_dataset_root: # assets/valid
+
+# root
+dataset_root_list: [
+                '/home/compu/dataset/CelebHQ',
+                '/home/compu/dataset/ffhq16k'
+            ]
+save_root: train_result
+
+# learning rate
+lr_G: 0.0001
+lr_D: 0.00001
+beta1: 0
+beta2: 0.99
+
+# weight of loss
+W_adv: 1
+W_gp: 10
+W_drift_D: 0.001
+
+# hyperparameters
+batch_per_gpu: 16
+max_step: 2000000
+
+# log cycle
+loss_cycle: 10
+test_cycle: 1000
+ckpt_cycle: 10000
+
+# model
+latent_dim: 512
+input_dim: 3
+output_dim: 3
+init_bias_to_zero: True
+max_depths: 7
+# depths: [64, 128, 256, 512, 512, 512, 512, 512, 512]
+depths: [512, 512, 512, 512, 256, 128, 64]
+
+# scale
+# default=[48000, 96000, 96000, 96000, 96000, 96000, 96000, 96000, 200000])
+# default=[48000, 96000, 96000, 96000, 96000, 96000, 200000, 300000, 300000])
+# default=[50000, 100000, 100000, 100000, 120000, 130000, 150000, 150000, 200000]) # kface_new
+# default=[50000, 100000, 100000, 150000, 200000, 200000, 300000, 150000, 200000])
+max_step_at_scale: [10000, 20000, 40000, 80000, 80000, 80000, 80000, 80000, 80000]
+
+# alpha 
+alpha: 0
+alpha_jump_start: [-1, 2000, 4000, 10000, 10000, 10000, 10000, 10000, 10000]
+alpha_jump_interval: [0, 100, 100, 100, 100, 100, 100, 100, 100]
+alpha_jump_Ntimes: [0, 100, 200, 400, 400, 400, 400, 400, 400]
+
+# activation
+LReLU_slope: 0.2
+generator_last_activation:
+
+# normalization
+apply_pixel_norm: True
+apply_minibatch_norm: True
+equalized_lr: True
+decision_layer_size: 1
+
+# ckpt path
+# blank is None, but None is "None"
+# ckpt_id: 
+# ckpt_step: 
+ckpt_id: run0424
+ckpt_step: 30000

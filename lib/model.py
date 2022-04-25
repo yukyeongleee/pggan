@@ -78,6 +78,13 @@ class ModelInterface(metaclass=abc.ABCMeta):
         self.G = torch.nn.parallel.DistributedDataParallel(self.G, device_ids=[self.gpu], broadcast_buffers=False, find_unused_parameters=True).module
         self.D = torch.nn.parallel.DistributedDataParallel(self.D, device_ids=[self.gpu]).module
 
+    def save_checkpoint(self, step):
+        """
+        Save model and optimizer parameters.
+        """
+        checkpoint.save_checkpoint(self.args, self.G, self.opt_G, name='G', global_step=step)
+        checkpoint.save_checkpoint(self.args, self.D, self.opt_D, name='D', global_step=step)
+    
     def load_checkpoint(self, step=-1):
         """
         Load pretrained parameters from checkpoint to the initialized models.
@@ -130,11 +137,4 @@ class ModelInterface(metaclass=abc.ABCMeta):
         """
         pass
 
-    def save_checkpoint(self, step):
-        """
-        Save model and optimizer parameters.
-        """
-        checkpoint.save_checkpoint(self.args, self.G, self.opt_G, name='G', global_step=step)
-        checkpoint.save_checkpoint(self.args, self.D, self.opt_D, name='D', global_step=step)
-        pass   
-    
+ 

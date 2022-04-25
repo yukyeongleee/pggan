@@ -1,5 +1,5 @@
 import torch
-from torch.utils.data import DataLoader
+import torch.nn.functional as F
 
 from lib import checkpoint, utils
 from lib.model import ModelInterface
@@ -47,63 +47,58 @@ class ProgressiveGAN(ModelInterface):
         self.D.cuda(self.gpu)
 
     # Override
-    def load_checkpoint(self, step=-1):
+    def save_checkpoint(self, global_step):
+        """
+        Save model and optimizer parameters.
+        """
+        ckpt_dict = {
+            "args": self.args.__dict__,
+            "global_step": global_step,
+            "alpha_G": self.G.alpha,
+            "alpha_D": self.D.alpha,
+            "alpha_index": self.alpha_index,
+            "alpha_jump_value": self.alpha_jump_value,
+            "next_alpha_jump_step": self.next_alpha_jump_step,
+            "scale_index": self.scale_index,
+            "next_scale_jump_step": self.next_scale_jump_step,
+        }
+
+        checkpoint.save_checkpoint(self.G, self.opt_G, name='G', ckpt_dict=ckpt_dict)
+        checkpoint.save_checkpoint(self.D, self.opt_D, name='D', ckpt_dict=ckpt_dict)
+       
+    # Override
+    def load_checkpoint(self):
         """
         Load pretrained parameters from checkpoint to the initialized models.
         """
-        # No checkpoint
-        if step == -1:
-            return 0
 
-        scale_jump_step = 0
-        for scale_index, max_step_at_scale in enumerate(self.args.max_step_at_scale):
+        G_ckpt_dict, D_ckpt_dict = \
+        checkpoint.load_checkpoint(self.args, name='G'), \
+        checkpoint.load_checkpoint(self.args, name='D')
 
-            scale_jump_step += max_step_at_scale
+        self.args.update(G_ckpt_dict["args"])
+        self.global_step = G_ckpt_dict["global_step"]
+        self.G.alpha = G_ckpt_dict["alpha_G"]
+        self.D.alpha = G_ckpt_dict["alpha_D"]
+        self.alpha_index = G_ckpt_dict["alpha_index"]
+        self.alpha_jump_value = G_ckpt_dict["alpha_jump_value"]
+        self.next_alpha_jump_step = G_ckpt_dict["next_alpha_jump_step"]
+        self.scale_index = G_ckpt_dict["scale_index"]
+        self.next_scale_jump_step = G_ckpt_dict["next_scale_jump_step"]
 
-            if step >= scale_jump_step:             
-                self.G.add_block(self.args.depths[scale_index + 1]) 
-                self.D.add_block(self.args.depths[scale_index + 1]) 
-                self.G.cuda()
-                self.D.cuda()
+        for index in range(self.scale_index):
+            self.G.add_block(self.args.depths[index])
+            self.D.add_block(self.args.depths[index])
+            self.G.cuda()
+            self.D.cuda()
 
-            else:
-                self.scale_index = scale_index
-                self.scale_jump_step = scale_jump_step
+        self.reset_solver()
+        
+        self.G.load_state_dict(G_ckpt_dict['model'], strict=False)
+        self.opt_G.load_state_dict(G_ckpt_dict['optimizer'])
 
-                self.G.alpha = 0
-                self.D.alpha = 0
-                self.alpha_index = 0
-                self.alpha_jump_step = scale_jump_step - max_step_at_scale + self.args.alpha_jump_start[scale_index]
-                self.alpha_jump_value = 1 / self.args.alpha_jump_Ntimes[scale_index]
-
-                # Check whether the given checkpoint matches with model parameters
-                ckpt_path = f'{self.args.save_root}/{self.args.ckpt_id}/ckpt/G_{step}.pt'
-                ckpt_dict = torch.load(ckpt_path, map_location=torch.device('cuda'))
-                A = set(ckpt_dict['model'].keys())
-                B = set(self.G.state_dict().keys())
-                assert A == B
-
-                # No blending at Scale 0
-                if scale_index > 0:
-                    step_at_scale = step - self.alpha_jump_step 
-                    
-                    if step_at_scale >= 0:       
-                        self.alpha_index = min(step_at_scale // self.args.alpha_jump_interval[scale_index] + 1,  self.args.alpha_jump_Ntimes[scale_index])
-                        self.alpha_jump_step += self.alpha_index * self.args.alpha_jump_interval[scale_index]
-                        alpha = self.alpha_index * self.alpha_jump_value
-                        self.G.alpha = alpha
-                        self.D.alpha = alpha
-
-                break
-
-        checkpoint.load_checkpoint(self.args, self.G, self.opt_G, name='G', global_step=step)
-        checkpoint.load_checkpoint(self.args, self.D, self.opt_D, name='D', global_step=step)
-
-        # Resize real images from dataset
-        self.set_dataset()
-        self.set_data_iterator()
-
-        return step
+        self.D.load_state_dict(D_ckpt_dict['model'], strict=False)
+        self.opt_D.load_state_dict(D_ckpt_dict['optimizer'])
 
     # Override
     def load_next_batch(self):
@@ -125,24 +120,88 @@ class ProgressiveGAN(ModelInterface):
         Initialize dataset using the dataset paths specified in the command line arguments.
         CelebA: 202,599 face images of the size 178×218 from 10,177 celebrities
         """
-        dataset = UnsupervisedDataset(self.args.dataset_root, self.scale_index, self.args.isMaster)
+        dataset = UnsupervisedDataset(self.args.dataset_root_list, self.scale_index, self.args.isMaster)
         N = len(dataset)
         N_train = round(N * 0.7)
         self.train_dataset, self.valid_dataset = torch.utils.data.random_split(dataset, [N_train, N - N_train])
 
-    # Override
-    def set_validation(self):
-        """
-        Predefine test images only if args.valid_dataset_root is specified.
-        These images are anchored for checking the improvement of the model.
-        """
-        if False: # self.args.valid_dataset_root: # assets/valid
-            self.valid_dataloader = DataLoader(self.valid_dataset, batch_size=self.args.batch_per_gpu, num_workers=8, drop_last=True)
-            batch = next(iter(self.valid_dataloader))
-            self.valid_batch = batch.to(self.gpu)
-
     def set_loss_collector(self):
         self._loss_collector = WGANGPLoss(self.args)
+    
+    def reset_solver(self): 
+        """
+        Reset data loaders corresponding to the output image size,
+        and reset optimizers as the number of learnable parameters are changed.
+        This method is required only when the Generator and the Discriminator add a new block.
+        """
+        self.set_dataset()
+        self.set_data_iterator()
+        self.set_optimizers()
+
+    def reset_alpha(self, global_step):
+        """
+        Initialize alpha-related-variables
+        This method is required only when the Generator and the Discriminator add a new block.
+        """
+        self.G.alpha = 0
+        self.D.alpha = 0
+        self.alpha_index = 0
+
+        self.next_alpha_jump_step = global_step + self.args.alpha_jump_start[self.scale_index]
+        self.alpha_jump_value = 1/self.args.alpha_jump_Ntimes[self.scale_index]
+
+        if self.args.isMaster:
+            print(f"alpha and alpha_index are initialized to 0")
+            print(f"next_alpha_jump_step is set to {self.next_alpha_jump_step}")
+            print(f"alpha_jump_value is set to {self.alpha_jump_value}")
+        
+    def change_scale(self, global_step):
+        self.scale_index += 1
+        self.next_scale_jump_step += self.args.max_step_at_scale[self.scale_index]
+        
+        # add a block to net G and net D
+        self.G.add_block(self.args.depths[self.scale_index])
+        self.D.add_block(self.args.depths[self.scale_index])
+        self.G.cuda()
+        self.D.cuda()
+
+        self.reset_solver()
+        self.reset_alpha(global_step)
+
+        if self.args.isMaster:
+            print(f"\nNOW global_step is {global_step}")
+            print(f"scale_index is updated to {self.scale_index}")
+            print(f"next_scale_jump_step is {self.next_scale_jump_step}")
+
+    def change_alpha(self, global_step): 
+
+        self.alpha_index += 1
+        self.G.alpha += self.alpha_jump_value
+        self.D.alpha += self.alpha_jump_value
+        self.G.alpha = round(self.G.alpha, 4)
+        self.D.alpha = round(self.D.alpha, 4)
+        
+        # check if alpha_index is reached to alpha_jump_Ntimes
+        if self.alpha_index == self.args.alpha_jump_Ntimes[self.scale_index]:
+            self.next_alpha_jump_step = 0
+        else: 
+            self.next_alpha_jump_step = global_step + self.args.alpha_jump_interval[self.scale_index]
+        
+        if self.args.isMaster:
+            print(f"\nNOW global_step is {global_step}")
+            print(f"alpha_index is updated to {self.alpha_index}")
+            print(f"next_alpha_jump_step is {self.next_alpha_jump_step}")
+            print(f"alpha is now {self.G.alpha}")
+
+    def check_jump(self, global_step):
+
+        # scale 이 바뀔 때
+        if self.next_scale_jump_step == global_step:
+            self.change_scale(global_step)
+
+        # alpha 가 바뀔 때 (Linear mode)
+        if self.next_alpha_jump_step == global_step:
+            self.change_alpha(global_step)
 
     def train_step(self):
         """
@@ -150,13 +209,16 @@ class ProgressiveGAN(ModelInterface):
         """
         
         img_real = self.load_next_batch()
-        # print("img_real", img_real.shape) # (8, 3, 256, 256)
         n_samples = len(img_real)
-
 
         ###########
         # Train D #
         ###########
+        if self.scale_index:
+            low_img_real = F.avg_pool2d(img_real, (2, 2))
+            low_img_real = F.upsample(low_img_real, scale_factor=2, mode='nearest')
+
+            img_real =  (1-self.D.alpha) * low_img_real + self.D.alpha * img_real
 
         img_real.requires_grad_()
         pred_real = self.D(img_real)
@@ -172,7 +234,7 @@ class ProgressiveGAN(ModelInterface):
             "pred_fake": pred_fake,
         }
 
-        loss_D = self.loss_collector.get_loss_D(D_dict, self.D)
+        loss_D = self.loss_collector.get_loss_D(D_dict)
         utils.update_net(self.opt_D, loss_D)
 
         ###########
@@ -192,15 +254,11 @@ class ProgressiveGAN(ModelInterface):
 
         return [img_real, img_fake]
 
-    def validation(self, step):
-        with torch.no_grad():
-            n_valid_samples = 5
-            latent_input = torch.randn(n_valid_samples, self.args.latent_dim).to(self.gpu)
-            Y = self.G(latent_input)
-        utils.save_image(self.args, step, "valid_imgs", Y)
+    def save_image(self, images, step):
+        utils.save_image(self.args, step, "imgs", images)
 
-    def save_image(self, result, step):
-        utils.save_image(self.args, step, "imgs", result)
+    def validation(self):
+        pass
         
     @property
     def loss_collector(self):

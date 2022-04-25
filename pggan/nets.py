@@ -1,3 +1,4 @@
+from re import X
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -77,7 +78,6 @@ class Generator(nn.Module):
 
         # Last layer activation function
         self.last_activation = last_activation
-        
 
 
     def init_format_layer(self, latent_dim):
@@ -118,43 +118,43 @@ class Generator(nn.Module):
                                             equalized_lr=self.equalized_lr, 
                                             init_bias_to_zero=self.init_bias_to_zero))
 
-
     def forward(self, x):
-
+        
         ## Normalize the input ?
         if self.apply_pixel_norm:
             x = self.pixel_norm(x)
-        x = x.view(-1, num_flat_features(x)) # 1 x N
+        x = x.view(-1, num_flat_features(x)) # [B, 512] 
+
         # format layer
-        x = self.leakyRelu(self.latent_format_layer(x))
-        x = x.view(x.size()[0], -1, 4, 4)
+        x = self.leakyRelu(self.latent_format_layer(x)) # MLP, [B, 512] to [B, 512x16]
+        x = x.view(x.size()[0], -1, 4, 4) # [B, 512x16] to [B, 512, 4, 4]
 
         if self.apply_pixel_norm:
             x = self.pixel_norm(x)
 
         # First block (no upsampling)
-        x = self.first_block(x)
+        x = self.first_block(x) # [B, 512, 4, 4] to [B, 512, 4, 4]
 
         # To RGB 
         # If there are 2 blocks and blending is required (alpha > 0)
-        if self.alpha > 0 and len(self.blocks) == 1:
+        if len(self.blocks) == 1:
             x_up = self.toRGB_blocks[-2](x, apply_upscale=True)
-
+            
         # Upper scales
-        for i, block in enumerate(self.blocks, 0):
+        for i, block in enumerate(self.blocks):
             x = block(x)
             # To RGB
             # If there are more than 2 blocks and blending is required (alpha > 0)
-            if self.alpha > 0 and i == (len(self.blocks) - 2):
+            if i == (len(self.blocks) - 2):
                 x_up = self.toRGB_blocks[-2](x, apply_upscale=True)
 
         # To RGB (No need to upscale for)
         x = self.toRGB_blocks[-1](x)
 
         # Blending with the lower resolution output when alpha > 0
-        if self.alpha > 0:
+        if len(self.blocks):
             x = (1.0 - self.alpha) * x_up + self.alpha * x
-
+        
         if self.last_activation is not None:
             x = self.last_activation(x)
 
@@ -246,8 +246,9 @@ class Discriminator(nn.Module):
                                              init_bias_to_zero=self.init_bias_to_zero)
 
     def forward(self, x, get_feature = False):
+
         # Alpha blending
-        if self.alpha > 0 and len(self.fromRGB_blocks) > 1:
+        if len(self.blocks):
             x_down = self.fromRGB_blocks[-2](x, apply_downscale=True)
 
         # From RGB layer
@@ -255,7 +256,7 @@ class Discriminator(nn.Module):
  
         # Caution: we must explore the layers group in reverse order !
         # Explore all scales before 0
-        apply_merge = self.alpha > 0 and len(self.blocks) > 1
+        apply_merge = len(self.blocks) > 0
         for block in reversed(self.blocks):
             x = block(x)
 
@@ -273,3 +274,4 @@ class Discriminator(nn.Module):
             return out
 
         return out, x
+

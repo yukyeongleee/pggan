@@ -83,23 +83,23 @@ def setup_ddp(gpu, ngpus_per_node):
             rank=gpu)
 
 
-def save_image(args, global_step, dir, images):
+def save_image(args, global_step, dir, list_of_tensors):
     dir_path = f'{args.save_root}/{args.run_id}/{dir}'
     os.makedirs(dir_path, exist_ok=True)
     
-    sample_image = make_grid_image(images).transpose([1,2,0]) * 255
+    sample_image = make_grid_image(list_of_tensors).detach().cpu().numpy().transpose([1,2,0]) * 255
     cv2.imwrite(dir_path + f'/e{global_step}.jpg', sample_image[:,:,::-1])
 
 
-def make_grid_image(images_list):
+def make_grid_image(list_of_tensors):
     grid_rows = []
 
-    for images in images_list:
-        images = images[:8] # Drop images if there are more than 8 images in the list
-        grid_row = torchvision.utils.make_grid(images.detach().cpu(), nrow=images.shape[0]) * 0.5 + 0.5
+    for tensors in list_of_tensors:
+        tensors = tensors[:8] # Drop images if there are more than 8 images in the list
+        grid_row = torchvision.utils.make_grid(tensors, nrow=tensors.shape[0]) * 0.5 + 0.5
         grid_rows.append(grid_row)
 
-    grid = torch.cat(grid_rows, dim=1).numpy()
+    grid = torch.cat(grid_rows, dim=1)
     return grid
 
 
